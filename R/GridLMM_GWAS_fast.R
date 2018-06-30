@@ -60,17 +60,17 @@ GridLMM_GWAS_fast = function(error_model,test_model,reduced_model,data,Y = NULL,
     if(verbose) print('Estimating h2_start via null model')
     if(ncol(Y) > 1) stop('EMMAX_start only implemented for a single response')
     if(method == 'BF') {
-      null_Bayes = GxElmm(error_model,data,V_setup = V_setup,h2_divisions=3,mc.cores = mc.cores)
+      null_Bayes = GridLMM_posterior(error_model,data,V_setup = V_setup,h2_divisions=3,mc.cores = mc.cores)
       h2_start = matrix(colSums(null_Bayes$h2s_results$posterior*null_Bayes$h2s_results[,1:length(V_setup$ZKZts),drop=FALSE]),nr=1)
     } else{
-      null_ML = GxElmm_ML(error_model,data,V_setup = V_setup,tolerance = h2_start_tolerance,mc.cores = mc.cores)
+      null_ML = GridLMM_ML(error_model,data,V_setup = V_setup,tolerance = h2_start_tolerance,mc.cores = mc.cores)
       ML = REML = FALSE
       if(method == 'ML') ML = TRUE
       if(method == 'REML' || method == 'BF') REML = TRUE
       h2_start = get_current_h2s(null_ML$results,names(V_setup$ZKZts),ML = ML,REML=REML)
     }
     if(verbose) {
-      print('GxElmm h2s:')
+      print('GridLMM_posterior h2s:')
       print(h2_start)
     }
   }

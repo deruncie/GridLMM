@@ -53,26 +53,18 @@ data$y = y
 
 g0 = GridLMM_ML(y~cov+(1|Group)+(0+cov|Group),data,relmat = list(Group = tcrossprod(scale_SNPs(Xg[,1:50],scaleX = F))/50))
 g0$results
-g1 = GxEMMA_GWAS(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_divisions = 10, save_V_list = 'V_folder',mc.cores=1)
-g1b = GridLMM_GWAS(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_divisions = 10, save_V_list = 'V_folder',mc.cores=1)
+g1 = GridLMM_GWAS(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_divisions = 10, save_V_list = 'V_folder',mc.cores=1)
 proximal_matrix = diag(1,50)
 diag(proximal_matrix[-1,]) = 1
 diag(proximal_matrix[-c(1:2),]) = 1
 diag(proximal_matrix[-c(1:3),]) = 1
 proximal_matrix[1:4,1:4]=1
-g2 = GxEMMA_GWAS(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_divisions = 10,mc.cores=1,proximal_matrix = proximal_matrix)
-g2b = GridLMM_GWAS(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_divisions = 10,mc.cores=1,proximal_matrix = proximal_matrix)
-g3 = GxEMMA_GWAS(y~cov + (1+cov|Group),~1,~0,data = data,X = Xg,X_ID = 'Group',proximal_matrix = proximal_matrix,h2_divisions = 10)
-g3b = GxEMMA_GWAS(y~cov + (1+cov|Group),~1,~0,data = data,X = Xg,X_ID = 'Group',h2_divisions = 10,RE_setup = g3$setup$RE_setup, V_list = g3$setup$V_list, downdate_Xs = g3$setup$downdate_Xs)
+g2 = GridLMM_GWAS(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_divisions = 10,mc.cores=1,proximal_matrix = proximal_matrix)
+g3 = GridLMM_GWAS(y~cov + (1+cov|Group),~1,~0,data = data,X = Xg,X_ID = 'Group',proximal_matrix = proximal_matrix,h2_divisions = 10)
+g3b = GridLMM_GWAS(y~cov + (1+cov|Group),~1,~0,data = data,X = Xg,X_ID = 'Group',h2_divisions = 10,RE_setup = g3$setup$RE_setup, V_list = g3$setup$V_list, downdate_Xs = g3$setup$downdate_Xs)
 head(g1$results)
 head(g2$results)
 head(g3$results)
-head(g3b$results)
-
-g3 = GxEMMA_GWAS_fast(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',max_step = 100,h2_step = 0.01,mc.cores=1)
-head(g3$results)
-
-g3b = GxEMMA_GWAS_fast(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',max_step = 100,h2_step = 0.01,mc.cores=1,proximal_matrix = proximal_matrix)
 head(g3b$results)
 
 g4 = GridLMM_GWAS_fast(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',max_step = 100,h2_step = 0.01,mc.cores=1)
