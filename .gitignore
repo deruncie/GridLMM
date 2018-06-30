@@ -1,3 +1,13 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# C++ files
+src/*.o
+src/*.so
+src/*.dll
+
 # History files
 .Rhistory
 .Rapp.history
