@@ -2,7 +2,7 @@ GridLMM_posterior = function(model,data,Y = NULL, X = NULL, weights = NULL,relma
                   h2_divisions = 10,
                   h2_prior = function(h2s,n) 1/n, a = 0, b = 0, inv_prior_X = 0,
                   target_prob = 0.99, # want this much probability to be distributed over at least thresh_nonzero grid squares 
-                  thresh_nonzero = 10,
+                  thresh_nonzero = 10, thresh_nonzero_marginal = 0,
                   V_setup = NULL, save_V_folder = NULL, # character vector giving folder name to save V_list
                   diagonalize=T,svd_K = T,drop0_tol = 1e-10,mc.cores = my_detectCores(),verbose=T) {
   
@@ -141,11 +141,18 @@ GridLMM_posterior = function(model,data,Y = NULL, X = NULL, weights = NULL,relma
     cum_posterior = cumsum(h2s_results$posterior[h2_order])
     
     num_top_grid = max(1,sum(cum_posterior <= target_prob))
+    
+    num_top_grid_marginal = sapply(1:(ncol(h2s_results)-1),function(i) {
+      marginal_posterior = data.frame(h2 = h2s_results[,i],posterior = h2s_results$posterior)
+      marginal_posterior = aggregate(posterior~h2,marginal_posterior,FUN = sum)
+      max(1,sum(cumsum(sort(marginal_posterior$posterior,decreasing = T)) < target_prob))
+    })
+    
     top_h2s = h2s_results[h2_order[1:num_top_grid],1:ncol(tested_h2s),drop=FALSE]
     h2s_to_test = get_h2s_to_test(top_h2s,tested_h2s,step_size,ML,REML)
     rownames(h2s_to_test) = NULL
     
-    if(nrow(h2s_to_test) == 0 && num_top_grid < thresh_nonzero) {
+    if(nrow(h2s_to_test) == 0 && (num_top_grid < thresh_nonzero || min(num_top_grid_marginal) < thresh_nonzero_marginal)) {
       step_size = step_size/2
       h2s_to_test = get_h2s_to_test(top_h2s,tested_h2s,step_size,ML,REML)
       rownames(h2s_to_test) = NULL

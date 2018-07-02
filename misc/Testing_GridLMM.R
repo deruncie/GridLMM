@@ -64,16 +64,11 @@ g3 = GridLMM_GWAS(y~cov + (1+cov|Group),~1,~0,data = data,X = Xg,X_ID = 'Group',
 g3b = GridLMM_GWAS(y~cov + (1+cov|Group),~1,~0,data = data,X = Xg,X_ID = 'Group',h2_divisions = 10,RE_setup = g3$setup$RE_setup, V_list = g3$setup$V_list, downdate_Xs = g3$setup$downdate_Xs)
 head(g1$results)
 head(g2$results)
-head(g3$results)
-head(g3b$results)
 
 g4 = GridLMM_GWAS_fast(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',max_step = 100,h2_step = 0.01,mc.cores=1)
 g4b = GridLMM_GWAS_fast(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',max_step = 100,h2_step = 0.01,mc.cores=1,proximal_matrix = proximal_matrix)
 head(g4$results)
 head(g4b$results)
-
-plot(g3$results$p_value_ML,g4$results$p_value_ML,log='xy');abline(0,1)
-plot(g3b$results$p_value_ML,g4b$results$p_value_ML,log='xy');abline(0,1)
 
 
 # Run GxEMMAnet
@@ -97,9 +92,8 @@ data$y = y
 # LASSO with random effect
 i = sample(1:nrow(X))
 gLASSO = GridLMMnet(y~cov + (1|Group),data,X,alpha = 1,h2_divisions = 100,diagonalize = T)
-# gLASSO2 = GxEMMAnet(y~cov + (1|Group),data,X[,],alpha = 1,h2_divisions = 10)
 
-# a = GxElmm_ML(y~cov + (1|Group),data,X=X[,which(gLASSO$beta[-c(1:2),80] != 0)],ML=T,REML=T,initial_step = 0.01);a$results
+# a = GridLMM_ML(y~cov + (1|Group),data,X=X[,which(gLASSO$beta[-c(1:2),80] != 0)],ML=T,REML=T,initial_step = 0.01);a$results
 
 # LASSO without random effect for comparison
 gLASSO_0 = glmnet(cbind(1,data$cov,X),y,alpha = 1,penalty.factor = c(0,0,rep(1,p)),standardize = FALSE)
