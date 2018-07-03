@@ -14,7 +14,7 @@ Description: Fits approximate Linear Mixed Models multiple random effects. The
     and Lasso/Elastic Net fitting of high-dimensional models with random effects.
 License: MIT + file LICENSE
 Imports: 
-    Rcpp (>= 0.12.17), 
+    Rcpp (>= 0.12.16), 
     RcppEigen (>= 0.3.3.4.0),
     Matrix, 
     data.table, 
