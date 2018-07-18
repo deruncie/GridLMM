@@ -4,6 +4,15 @@
 // [[Rcpp::depends(RcppEigen)]]
 using namespace Eigen;
 
+
+// [[Rcpp::export()]]
+MatrixXd chol_c(Map<MatrixXd> X){
+  // Replacement of R's chol function with Eigen's version
+  Eigen::LLT<MatrixXd> llt_of_X(X);
+  MatrixXd U = llt_of_X.matrixU();
+  return(U);
+}
+
 // [[Rcpp::export()]]
 Rcpp::List premultiply_list_of_matrices(MSpMat Qt, Rcpp::List X_list){
   int p = X_list.length();

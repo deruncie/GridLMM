@@ -269,11 +269,17 @@ make_chol_V_setup = function(V_setup,h2s){
   downdate_ratios = V_setup$downdate_ratios
   V = (1-sum(h2s)) * V_setup$resid_V
   for(i in 1:length(h2s)) V = V + h2s[i] * V_setup$ZKZts[[i]] * downdate_ratios[i]
-  V = Matrix(V)
-  chol_V = chol(V)
+  # test if V is diagonal or sparse
+  non_zero_upper_tri_V = abs(V[upper.tri(V,diag = FALSE)]) > 1e-10
+  if(sum(non_zero_upper_tri_V) == 0) {  # V is diagonal
+    chol_V = as(diag(sqrt(diag(V))),'CsparseMatrix')
+  } else if(sum(non_zero_upper_tri_V) < length(non_zero_upper_tri_V) / 2) { # V is sparse
+    V = Matrix(V)
+    chol_V = as(chol(V),'CsparseMatrix')
+  } else{ # V is dense, use Eigen LLT
+    chol_V = chol_c(V)
+  }
   V_log_det = 2*sum(log(diag(chol_V)))
-  if(inherits(chol_V,'ddiMatrix')) chol_V = as(chol_V,'CsparseMatrix')
-  if(inherits(V,'dsyMatrix') || (!inherits(V,'ddiMatrix') && length(chol_V@i) > prod(dim(chol_V))/4)) chol_V = as.matrix(chol_V) # no reason to store as sparse matrix if not sparse
   
   chol_V_setup = list(chol_V = chol_V,V_log_det = V_log_det, h2s = h2s)
   

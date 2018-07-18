@@ -161,9 +161,17 @@ make_V_list = function(RE_setup,
       h2s = h2s_matrix[,h2_index]
       V = diag((1-sum(h2s))/weights)  # include weights here. This should be the only place they are needed.
       for(i in 1:n_RE) V = V + h2s[i] * ZKZts[[i]] * downdate_ratios[i]
-      chol_V = chol(V)
-      if(length(chol_V@i) > prod(dim(chol_V))/4) chol_V = as.matrix(chol_V) # no reason to store as sparse matrix if not sparse
-      V_log_det = 2*sum(log(diag(chol_V)))
+      # test if V is diagonal or sparse
+      non_zero_upper_tri_V = abs(V[upper.tri(V,diag = FALSE)]) > 1e-10
+      if(sum(non_zero_upper_tri_V) == 0) {  # V is diagonal
+        chol_V = as(diag(sqrt(diag(V))),'CsparseMatrix')
+      } else if(sum(non_zero_upper_tri_V) < length(non_zero_upper_tri_V) / 2) { # V is sparse
+        V = Matrix(V)
+        chol_V = as(chol(V),'CsparseMatrix')
+      } else{ # V is dense, use Eigen LLT
+        chol_V = chol_c(V)
+      }
+      V_log_det = 2*sum(log(diag(chol_V)))      
       return(list(h2_index = h2_index,chol_V = chol_V, V_log_det = V_log_det))
     })
     if(is.character(save_V_list)){

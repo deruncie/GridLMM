@@ -7,6 +7,17 @@
 
 using namespace Rcpp;
 
+// chol_c
+MatrixXd chol_c(Map<MatrixXd> X);
+RcppExport SEXP _GridLMM_chol_c(SEXP XSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Map<MatrixXd> >::type X(XSEXP);
+    rcpp_result_gen = Rcpp::wrap(chol_c(X));
+    return rcpp_result_gen;
+END_RCPP
+}
 // premultiply_list_of_matrices
 Rcpp::List premultiply_list_of_matrices(MSpMat Qt, Rcpp::List X_list);
 RcppExport SEXP _GridLMM_premultiply_list_of_matrices(SEXP QtSEXP, SEXP X_listSEXP) {
@@ -103,6 +114,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
+    {"_GridLMM_chol_c", (DL_FUNC) &_GridLMM_chol_c, 1},
     {"_GridLMM_premultiply_list_of_matrices", (DL_FUNC) &_GridLMM_premultiply_list_of_matrices, 2},
     {"_GridLMM_F_hats", (DL_FUNC) &_GridLMM_F_hats, 6},
     {"_GridLMM_log_det_of_XtX", (DL_FUNC) &_GridLMM_log_det_of_XtX, 3},

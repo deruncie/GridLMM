@@ -4,7 +4,15 @@ GridLMM_GWAS_fast = function(error_model,test_model,reduced_model,data,Y = NULL,
                             inv_prior_X = NULL,target_prob = 0.99,
                             proximal_matrix = NULL, downdate_Xs = NULL,
                             V_setup = NULL, save_V_folder = NULL, 
-                            diagonalize=T,svd_K = T,drop0_tol = 1e-10,mc.cores = my_detectCores(),clusterType = 'mclapply',chunkSize = 10000,verbose=T) {
+                            diagonalize=T,svd_K = T,drop0_tol = 1e-10,mc.cores = my_detectCores(),clusterType = 'mclapply',verbose=T) {
+  
+  ## Questions:
+    # what should I do about parallel processing? 
+    #     Can I give the option of passing a cluster? 
+    #     What about combining multiple jobs? 
+    #     Can that be an additional wrapper script?
+    # Can I re-write so re-using chol_V's in memory is easier?
+    # what about multiple traits in parallel?
   
   # -------- check terms in models ---------- #
   terms = c(all.vars(error_model), all.vars(test_model),all.vars(reduced_model))
