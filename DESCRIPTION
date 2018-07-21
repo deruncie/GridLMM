@@ -1,7 +1,7 @@
 Package: GridLMM
 Type: Package
 Title: Efficient Mixed Models for GWAS with multiple Random Effects
-Version: 0.0
+Version: 0.0.0.9000
 Date: 2018-06-30
 Author: Daniel E Runcie
 Maintainer: Daniel Runcie <deruncie@ucdavis.edu>

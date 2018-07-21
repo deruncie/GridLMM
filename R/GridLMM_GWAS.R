@@ -72,17 +72,8 @@ GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,Y = NULL, weig
     # if reporting BF's, don't use EMMAX_start
     if(!is.null(h2_start)) stop('h2_start should be NULL if EMMAX_start == TRUE')
     if(ncol(Y) > 1) stop('EMMAX_start only implemented for a single response')
-    # if(!all(names(RE_terms$cnms) %in% names(RE_setup))) stop('lme4qtl failed. Please run estimate h2_start directly')
-    relmats = lapply(names(RE_setup),function(term) {
-      K = RE_setup[[term]]$K
-      diag(K) = diag(K) + 1e-10
-      K
-    })  # NOTE: adding small element to diagonal to "fix" eigenvalues < 0
-    names(relmats) = names(RE_setup)
-    emmax <- lme4qtl::relmatLmer(formula,data=data,relmat = relmats,weights = weights)
-    vars = as.data.frame(lme4::VarCorr(emmax))$vcov
-    h2_start = vars/sum(vars)
-    h2_start = h2_start[-length(h2_start)]
+    null_ML = GridLMM_ML(formula,data,relmat = relmat,tolerance = 0.001,mc.cores = mc.cores)
+    h2_start = get_current_h2s(null_ML$results,names(null_ML$setup$ZKZts),ML = ML,REML=REML)[1,]
     names(h2_start) = NULL
     if(verbose) print(sprintf('EMMAX h2s: %s',paste(signif(h2_start,2),collapse=', ')))
   }

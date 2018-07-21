@@ -13,7 +13,7 @@ Xg = matrix(sample(c(0,1),nG*p,replace=T),nrow = nG)
 Xg[,4:6] = Xg[,1:3]
 rownames(Xg) = 1:nG
 X = Z %*% Xg
-X = matrix(sample(c(0,1),n*p,replace=T),nrow = n)
+# X = matrix(sample(c(0,1),n*p,replace=T),nrow = n)
 X = sweep(X,2,colMeans(X),'-')
 data$ID = factor(1:nrow(data))
 rownames(X) = data$ID
