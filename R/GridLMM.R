@@ -1,4 +1,67 @@
-GridLMM_posterior = function(model,data,Y = NULL, X = NULL, weights = NULL,relmat = NULL,  
+#' Evaluate the posterior of a linear mixed model using the Grid-sampling algorithm
+#' 
+#' Performs approximate posterior inference of a linear mixed model by evaluating the posterior over a grid
+#'    of values of the variance component proportions. The grid evaluation uses a heuristic to avoid traversing 
+#'    the entire grid. This should work well as long as the posterior is unimodal.        
+#'
+#' @details       
+#' Posterior inference involves an adaptive grid search. Generally, we start with a very coarse grid (with as few as 2-3 vertices per variance component)
+#'    and then progressively increase the grid resolution focusing only on regions of high posterior probability. This is controlled
+#'    by \code{h2_divisions}, \code{target_prob}, \code{thresh_nonzero}, and \code{thresh_nonzero_matrginal}. The sampling algorithm is as follows:
+#'    \itemize{
+#'    \item Start by evaluating the posterior at each vertex of a trial grid with resolution \eqn{m}
+#'    \item Find the minimum number of vertices needed to sum to \code{target_prob} of the current (discrete) posterior. 
+#'       Repeat for the marginal posteriors of each variance component#'    
+#'    \item If these numbers are smaller than \code{thresh_nonzero} or \code{thresh_nonzero_matrginal}, respectively, form a new grid
+#'       by increasing the grid resolution to \eqn{m/2}. Otherwise, STOP.
+#'    \item Begin evaluating the posterior at the new grid only at those grid vertices that are adjacent (in any dimension) to any of the top
+#'       grid vertices in the old grid.
+#'    \item Re-evaluate the distribution of the posterior over the new grid. If any new vertices contribute to the top \code{target_prob} fraction of the 
+#'       overall posterior, include these in the "top" set and return to step 4. 
+#'       Note - the prior weights for the grid vertices must be updated each time the grid increases in resolution.
+#'    \item Repeat steps 4-5 until no new grid vertices contribute to the "top" set.
+#'    \item Repeat steps 2-6 until a STOP is reached at step 3.
+#'    }
+#'    
+#' Note: Default parameters for priors give flat (improper) priors. These should be used with care, especially for calculations of Bayes Factors.
+#'
+#' @param formula A two-sided linear formula as used in \code{\link[lme4]{lmer}} describing the fixed-effects
+#'    and random-effects of the model on the RHS and the response on the LHS. Note: correlated random-effects
+#'    are not implemented, so using one or two vertical bars (\code{|}) or one is identical. At least one random effect is needed.
+#' @param data A data frame containing the variables named in \code{formula}.
+#' @param weights An optional vector of observation-specific weights.
+#' @param relmat A list of matrices that are proportional to the (within) covariance structures of the group level effects. 
+#'     The names of the matrices should correspond to the columns in \code{data} that are used as grouping factors. All levels
+#'     of the grouping factor should appear as rownames of the corresponding matrix.
+#' @param h2_divisions Starting number of divisions of the grid for each variance component.
+#' @param h2_prior Function that takes two arguments: 1) A vector of \code{h2s} (ie variance component proportions), and 
+#'     2) An integer giving the number of vertices in the full grid. The function should return a non-negative value giving the prior 
+#'     weight to the grid cell corresponding to \code{h2s}.
+#' @param a,b Shape and Rate parameters of the Gamma prior for the residual variance \eqn{\sigma^2}. Setting both to zero gives a limiting "default" prior.
+#' @param inv_prior_X Vector of values for the prior precision of each of the fixed effects (including an intercept). Will be recycled if necessary.
+#' @param target_prob See \strong{Details}.
+#' @param thresh_nonzero  See \strong{Details}.
+#' @param thresh_nonzero_marginal  See \strong{Details}.
+#' @param V_setup Optional. A list produced by a GridLMM function containing the pre-processed V decompositions for each grid vertex, 
+#'     or the information necessary to create this. Generally saved from a previous run of GridLMM on the same data.
+#' @param save_V_folder Optional. A character vector giving a folder to save pre-processed V decomposition files for future / repeated use. 
+#'     If null, V decompositions are stored in memory
+#' @param diagonalize If TRUE and the model includes only a single random effect, the "GEMMA" trick will be used to diagonalize V. This is done
+#'     by calculating the SVD of K, which can be slow for large samples.
+#' @param svd_K If TRUE and \code{nrow(K) < nrow(Z)}, then the SVD is done on \eqn{K} instead of \eqn{ZKZ^T}
+#' @param drop0_tol Values closer to zero than this will be set to zero when forming sparse matrices.
+#' @param mc.cores Number of cores to use for parallel evaluations.
+#' @param verbose Should progress be printed to the screen?
+#'
+#' @return A list with three elements:
+#' \item{h2s_results}{A data frame with each row an evaluated grid vertex, with the first \eqn{l} columns giving the \eqn{h^2}'s, and the final column the 
+#'     corresponding posterior mass}
+#' \item{h2s_solutions}{A list with the parameters of the NIG distribution for each grid vertex}
+#' \item{V_setup}{The \code{V_setup} object for this model. Can be re-passed to this function (or other GridLMM functions) to re-fit the model to the same data.}
+#' @export
+#'
+#' @examples
+GridLMM_posterior = function(formula,data,weights = NULL,relmat = NULL,  
                   h2_divisions = 10,
                   h2_prior = function(h2s,n) 1/n, a = 0, b = 0, inv_prior_X = 0,
                   target_prob = 0.99, # want this much probability to be distributed over at least thresh_nonzero grid squares 
@@ -6,8 +69,8 @@ GridLMM_posterior = function(model,data,Y = NULL, X = NULL, weights = NULL,relma
                   V_setup = NULL, save_V_folder = NULL, # character vector giving folder name to save V_list
                   diagonalize=T,svd_K = T,drop0_tol = 1e-10,mc.cores = my_detectCores(),verbose=T) {
   
-  # -------- check terms in models ---------- #
-  terms = c(all.vars(model))
+  # -------- check terms in formulas ---------- #
+  terms = c(all.vars(formula))
   if(!all(terms %in% colnames(data))) {
     missing_terms = terms[!terms %in% colnames(data)]
     stop(sprintf('terms %s missing from data',paste(missing_terms,sep=', ')))
@@ -15,17 +78,16 @@ GridLMM_posterior = function(model,data,Y = NULL, X = NULL, weights = NULL,relma
   
   # -------- Response ---------- #
   n = nrow(data)
-  if(is.null(Y)){
-    if(length(model) == 3){
-      # if(length(model) == 2) then there is no response
-      Y = as.matrix(data[,all.vars(model[[2]])])
-      storage.mode(Y) = 'numeric'
-    }
+  if(length(formula) == 3){
+    Y = as.matrix(data[,all.vars(formula[[2]]),drop=FALSE])
+    storage.mode(Y) = 'numeric'
+  } else{
+    stop('formula missing LHS or RHS?')
   }
+  if(any(is.na(Y))) stop('Missing values in y')
   
   # -------- Constant Fixed effects ---------- #
-  X_cov = model.matrix(nobars(model),data)
-  if(!is.null(X)) X_cov = cbind(X_cov,X)
+  X_cov = model.matrix(nobars(formula),data)
   linear_combos = caret::findLinearCombos(X_cov)
   if(!is.null(linear_combos$remove)) {
     cat(sprintf('dropping column(s) %s to make covariates full rank\n',paste(linear_combos$remove,sep=',')))
@@ -41,11 +103,13 @@ GridLMM_posterior = function(model,data,Y = NULL, X = NULL, weights = NULL,relma
     stop('wrong length of inv_prior_X')
   }
   
-  # -------- Random effects ---------- #
-  RE_setup = make_RE_setup(model = model,data = data,relmat = relmat)
-  
   # -------- prep V ---------- #
-  if(is.null(V_setup))  V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K,drop0_tol,save_V_folder,verbose)
+  if(is.null(V_setup))  {
+    RE_setup = make_RE_setup(formula = formula,data = data,relmat = relmat)
+    V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K,drop0_tol,save_V_folder,verbose)
+  } else{
+    RE_setup = V_setup$RE_setup
+  }
   
   # -------- rotate data ---------- #
   # speeds to everything if a single random effect
@@ -158,7 +222,6 @@ GridLMM_posterior = function(model,data,Y = NULL, X = NULL, weights = NULL,relma
       rownames(h2s_to_test) = NULL
     } 
     
-    # if(sum(h2s_results$posterior[1:length(new_h2s_solutions)]) < 1-target_prob) break
   }
   h2s_results = h2s_results[do.call(order,lapply(seq_along(ncol(h2s_results)-1),function(x) h2s_results[,x])),,drop=FALSE]
   
@@ -167,13 +230,38 @@ GridLMM_posterior = function(model,data,Y = NULL, X = NULL, weights = NULL,relma
 
 
 
-GridLMM_ML = function(model,data,Y = NULL, X = NULL, weights = NULL,relmat = NULL,  
+#' Find the (Restricted) Maximim Likelihood solution to a linear mixed model by grid search
+#' 
+#' Uses the GridLMM approach to find the ML or REML solution to variance componenents of a linear mixed model.
+#' 
+#' @details Note: this is not a particularly efficient technique for a single model. 
+#'    However, the calculations for each grid vertex can be re-used in later fits (ex. GWAS).
+#'    This function is used internally by other GridLMM functions to find starting values.
+#'    
+#' The function uses a hill-climbing heuristic on the grid. It starts be evaluating a grid with a step size of \code{initial_step} \eqn{h^2} units. 
+#'     It then halves the step size and evaluates all grid vertices adjacent to the grid vertex with the highest ML (and/or REML) value.
+#'     If a new maximum is found, the grid vertices adjacent to the new maximum are evaluated. This is repeated until no new maximum is found.
+#'     At this point, if the step size is smaller than \code{tolerance}, the algorithm stops. Otherwise, the step size is halved again and the algorithm repeats.
+#'
+#' @inheritParams GridLMM_posterior
+#' @param initial_step See \strong{Details}.
+#' @param tolerance See \strong{Details}.
+#' @param ML If TRUE, ML solutions will be found.
+#' @param REML If TRUE, REML solutions will be found.
+#'
+#' @return A list with two elements:
+#' \item{results}{A data frame with each row a ML or REML solution, and columns giving additional statistics and parameter values.}
+#' \item{V_setup}{The \code{V_setup} object for this model. Can be re-passed to this function (or other GridLMM functions) to re-fit the model to the same data.}
+#' @export
+#'
+#' @examples
+GridLMM_ML = function(formula,data,weights = NULL,relmat = NULL,  
                      initial_step = 0.5,tolerance = 0.01,ML = T,REML=T,
                      V_setup = NULL, save_V_folder = NULL, # character vector giving folder name to save V_list
                      diagonalize=T,svd_K = T,drop0_tol = 1e-10,mc.cores = my_detectCores(),verbose=T) {
   
-  # -------- check terms in models ---------- #
-  terms = c(all.vars(model))
+  # -------- check terms in formulas ---------- #
+  terms = c(all.vars(formula))
   if(!all(terms %in% colnames(data))) {
     missing_terms = terms[!terms %in% colnames(data)]
     stop(sprintf('terms %s missing from data',paste(missing_terms,sep=', ')))
@@ -181,18 +269,16 @@ GridLMM_ML = function(model,data,Y = NULL, X = NULL, weights = NULL,relmat = NUL
   
   # -------- Response ---------- #
   n = nrow(data)
-  if(is.null(Y)){
-    if(length(model) == 3){
-      # if(length(model) == 2) then there is no response
-      Y = as.matrix(data[,all.vars(model[[2]])])
-      storage.mode(Y) = 'numeric'
-      if(is.null(colnames(Y))) colnames(Y) = 1:ncol(Y)
-    }
+  if(length(formula) == 3){
+    Y = as.matrix(data[,all.vars(formula[[2]]),drop=FALSE])
+    storage.mode(Y) = 'numeric'
+  } else{
+    stop('formula missing LHS or RHS?')
   }
+  if(any(is.na(Y))) stop('Missing values in y')
   
   # -------- Constant Fixed effects ---------- #
-  X_cov = model.matrix(nobars(model),data)
-  if(!is.null(X)) X_cov = cbind(X_cov,X)
+  X_cov = model.matrix(nobars(formula),data)
   linear_combos = caret::findLinearCombos(X_cov)
   if(!is.null(linear_combos$remove)) {
     cat(sprintf('dropping column(s) %s to make covariates full rank\n',paste(linear_combos$remove,sep=',')))
@@ -200,17 +286,18 @@ GridLMM_ML = function(model,data,Y = NULL, X = NULL, weights = NULL,relmat = NUL
   }
   if(any(is.na(X_cov))) stop('Missing values in covariates')
   
-  # convert X_cov into X_list
   p = ncol(X_cov)
   
-  # -------- Random effects ---------- #
-  RE_setup = make_RE_setup(model = model,data = data,relmat = relmat)
-  
   # -------- prep V ---------- #
-  if(is.null(V_setup))  V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K,drop0_tol,save_V_folder,verbose)
+  if(is.null(V_setup))  {
+    RE_setup = make_RE_setup(formula = formula,data = data,relmat = relmat)
+    V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K,drop0_tol,save_V_folder,verbose)
+  } else{
+    RE_setup = V_setup$RE_setup
+  }
   
   # -------- rotate data ---------- #
-  # speeds to everything if a single random effect
+  # speeds up everything if a single random effect
   Qt = V_setup$Qt
   if(!is.null(Qt)){
     Y <- as.matrix(Qt %*% Y)

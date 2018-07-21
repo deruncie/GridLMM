@@ -1,13 +1,28 @@
-GridLMMnet = function(model,data,X, y = NULL, weights = NULL, 
+#' LASSO solutions in a linear mixed model using GridLMM
+#'
+#' Finds LASSO or Elastic Net solutions for a multiple regression problem with correlated errors.
+#' 
+#' @details Finds the full LASSO or Elastic Net solution path by running \code{\link[glmnet]{glmnet}} at each grid vertex
+#'
+#' @inheritParams GridLMM_GWAS
+#' @inheritParams glmnet::glmnet
+#' @param X Variables in model that well be penalized with the elastic net penalty. Covariates specified in \code{formula} are not penalized.
+#' @param ... 
+#'
+#' @return An object with S3 class "glmnet","*" , where "*" is "elnet". See \code{\link[glmnet]{glmnet}}.
+#' @export
+#'
+#' @examples
+GridLMMnet = function(formula,data,X, weights = NULL, 
                      centerX = TRUE,scaleX = TRUE,relmat = NULL,
-                     h2_divisions = 10, h2_EMMAX = NULL,
+                     h2_divisions = 10, h2_start = NULL,
                      alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001), lambda=NULL,
                      RE_setup = NULL, V_list_setup = NULL, save_V_list = NULL,
                      diagonalize=T,svd_K = T,drop0_tol = 1e-10,mc.cores = parallel::detectCores(),clusterType = 'mclapply',verbose=T,...) 
 {
   
-  # -------- check terms in models ---------- #
-  terms = c(all.vars(model))
+  # -------- check terms in formulas ---------- #
+  terms = c(all.vars(formula))
   if(!all(terms %in% colnames(data))) {
     missing_terms = terms[!terms %in% colnames(data)]
     stop(sprintf('terms %s missing from data',paste(missing_terms,sep=', ')))
@@ -15,16 +30,15 @@ GridLMMnet = function(model,data,X, y = NULL, weights = NULL,
   
   # -------- Response ---------- #
   n = nrow(data)
-  if(is.null(y)){
-    if(length(model) == 3){
-      # if(length(model) == 2) then there is no response
-      y = as.matrix(data[,all.vars(model[[2]])])
-    }
+  if(length(formula) == 3){
+    y = as.matrix(data[,all.vars(formula[[2]])])
+  } else{
+    stop('Check if formula missing LHS or RHS.')
   }
   nobs = n
   
   # -------- Constant Fixed effects ---------- #
-  X_cov = model.matrix(nobars(model),data)
+  X_cov = model.matrix(nobars(formula),data)
   linear_combos = caret::findLinearCombos(X_cov)
   if(!is.null(linear_combos$remove)) {
     cat(sprintf('dropping column(s) %s to make covariates full rank\n',paste(linear_combos$remove,sep=',')))
@@ -36,13 +50,13 @@ GridLMMnet = function(model,data,X, y = NULL, weights = NULL,
   
   # -------- Random effects ---------- #
   if(is.null(RE_setup)) {
-    RE_setup = make_RE_setup(model = model,data,relmat = relmat,verbose=verbose)
+    RE_setup = make_RE_setup(formula = formula,data,relmat = relmat,verbose=verbose)
   }
   
   V_list_setup = make_V_list(RE_setup,
                              weights,
                              h2_divisions,  
-                             h2_EMMAX,
+                             h2_start,
                              save_V_list,
                              diagonalize,
                              svd_K,

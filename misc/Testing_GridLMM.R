@@ -1,4 +1,3 @@
-library(GxEMMA)
 library(GridLMM)
 
 set.seed(1)
@@ -14,7 +13,7 @@ Xg = matrix(sample(c(0,1),nG*p,replace=T),nrow = nG)
 Xg[,4:6] = Xg[,1:3]
 rownames(Xg) = 1:nG
 X = Z %*% Xg
-# X = matrix(sample(c(0,1),n*p,replace=T),nrow = n)
+X = matrix(sample(c(0,1),n*p,replace=T),nrow = n)
 X = sweep(X,2,colMeans(X),'-')
 data$ID = factor(1:nrow(data))
 rownames(X) = data$ID
@@ -60,10 +59,13 @@ diag(proximal_matrix[-c(1:2),]) = 1
 diag(proximal_matrix[-c(1:3),]) = 1
 proximal_matrix[1:4,1:4]=1
 g2 = GridLMM_GWAS(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_divisions = 10,mc.cores=1,proximal_matrix = proximal_matrix)
-g3 = GridLMM_GWAS(y~cov + (1+cov|Group),~1,~0,data = data,X = Xg,X_ID = 'Group',proximal_matrix = proximal_matrix,h2_divisions = 10)
-g3b = GridLMM_GWAS(y~cov + (1+cov|Group),~1,~0,data = data,X = Xg,X_ID = 'Group',h2_divisions = 10,RE_setup = g3$setup$RE_setup, V_list = g3$setup$V_list, downdate_Xs = g3$setup$downdate_Xs)
+g3 = GridLMM_GWAS(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',proximal_matrix = proximal_matrix,h2_divisions = 10)
+g3b = GridLMM_GWAS(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_divisions = 10,
+                   RE_setup = g3$setup$RE_setup, V_list = g3$setup$V_list, downdate_Xs = g3$setup$downdate_Xs)
 head(g1$results)
 head(g2$results)
+head(g3$results)
+head(g3b$results)
 
 g4 = GridLMM_GWAS_fast(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',max_step = 100,h2_step = 0.01,mc.cores=1)
 g4b = GridLMM_GWAS_fast(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',max_step = 100,h2_step = 0.01,mc.cores=1,proximal_matrix = proximal_matrix)
@@ -74,7 +76,7 @@ head(g4b$results)
 # Run GxEMMAnet
 library(glmnet)
 
-h2 = 0.0
+h2 = 0.7
 prop_X = 0.6
 
 p_g = 10 # include 10 coefficients
@@ -102,8 +104,8 @@ gLASSO_0 = glmnet(cbind(1,data$cov,X),y,alpha = 1,penalty.factor = c(0,0,rep(1,p
 
 par(mfrow=c(2,1))
 cols = c(1,1,rep(2,p_g),rep(3,p_gxe),rep(3,p-p_g-p_gxe))
-plot(gLASSO,col=cols[-1])
-plot(gLASSO_0,col=cols[-1])
+plot(gLASSO,col=cols[-1],'lambda')
+plot(gLASSO_0,col=cols[-1],'lambda')
 
 library(sommer)
 library(lme4)

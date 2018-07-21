@@ -1,6 +1,43 @@
-GridLMM_GWAS_fast = function(error_model,test_model,reduced_model,data,Y = NULL, weights = NULL,
+#' GridLMM GWAS with adaptive algorithm. 
+#'
+#' Performs a GWAS using the adaptitve GridLMM algorithm. Can perform LRTs, Wald-tests, or calculate Bayes Factors.
+#' 
+#' @details Uses the adaptive GridLMM appraoch to evalue ML or REML solutions for each test, or calculate posterior distributions.
+#'
+#' @inheritParams GridLMM_posterior
+#' @param test_formula One-sided formula for the alternative model (ML or BF), or full model (REML) to be applied to each test (ie \emph{marker}, or column of \code{X}). 
+#'     Each term on the RHS will be multiplied by a column of X to form a new covariate. 
+#'     Ex. \code{~1} specifices an intercept for each marker.
+#'     \code{~1+cov} species an intercept and slope on \code{cov} for each marker.
+#' @param reduced_formula One-sided formula for the reduced model. Same format as \code{test_formula}. Should have fewer degrees of freedom than \code{test_formula}. Not used for REML models.
+#' @param Y Optional matrix of responses. Currently only one response is evaluated.
+#' @param X Matrix of markers with \eqn{p} columns. Each column of X is used as a separate association test. Should have row names that correspond to the \code{X_ID} column of \code{data}.
+#' @param X_ID Column of \code{data} that identifies the row of \code{X} that corresponding to each observation. 
+#'     It is possible that multiple observations reference the same row of \code{X}.
+#' @param centerX,scaleX,fillNAX TRUE/FALSE for each. Applied to the \code{X} matrix before using \code{X} to form any GRMs.
+#' @param X_map Optional. Data frame with information on each marker such as chromosome, position, etc. Will be appended to the results
+#' @param h2_step Step size of the grid
+#' @param h2_start Optional. Matrix with each row a vector of \eqn{h^2} parameters defining starting values for the grid. Typically ML/REML solutions for the null model. 
+#'     If null, will be calculated using \link{GridLMM_ML}.
+#' @param h2_start_tolerance Optional. Grid size for \link{GridLMM_ML} in finding ML/REML solutions for the mull model.
+#' @param max_steps Maximum iterations of the heuristic algorithm per marker.
+#' @param method One of 'ML', 'REML', or 'BF'. 'ML' implies Maximum Likelihood evaluation, with the LRT. 'REML' wimplies a Wald-test. 'BF' does posterior evaluation and calculates Bayes Factors.
+#' @param proximal_matrix A matrix of size \eqn{p \times p} used to determine which markers should be dropped from the GRM when testing each marker. 
+#'     Each row is a vector of 0's or 1's, with element \code{(i,j)==1} if marker j should be dropped when testing marker i.
+#' @param downdate_Xs A list providing information for updating GRMs based on proximal markers. 
+#'     Created based on \code{proximal_matrix} by this function, and can be re-passed to the function in future runs. 
+#' @param clusterType `mclapply`
+#'
+#' @return A list with two elements:
+#' \item{results}{A data frame with each row the results of the association test for a column of \code{X}, plus asssociated parameter values and statistics.}
+#' \item{setup}{A list with several objects needed for re-running the model, including \code{V_setup} and \code{downdate_Xs}. 
+#'   These can be re-passed to this function (or other GridLMM functions) to re-fit the model to the same data.}
+#' @export
+#'
+#' @examples
+GridLMM_GWAS_fast = function(formula,test_formula,reduced_formula,data,Y = NULL, weights = NULL,
                             X,X_ID = 'ID',centerX = FALSE,scaleX = FALSE,fillNAX = FALSE,X_map = NULL, relmat = NULL,
-                            h2_start = NULL, h2_step = 0.01, h2_start_tolerance = 0.001, max_steps = 100, method = 'ML',
+                            h2_step = 0.01, h2_start = NULL, h2_start_tolerance = 0.001, max_steps = 100, method = 'ML',
                             inv_prior_X = NULL,target_prob = 0.99,
                             proximal_matrix = NULL, downdate_Xs = NULL,
                             V_setup = NULL, save_V_folder = NULL, 
@@ -15,7 +52,7 @@ GridLMM_GWAS_fast = function(error_model,test_model,reduced_model,data,Y = NULL,
     # what about multiple traits in parallel?
   
   # -------- check terms in models ---------- #
-  terms = c(all.vars(error_model), all.vars(test_model),all.vars(reduced_model))
+  terms = c(all.vars(formula), all.vars(test_formula),all.vars(reduced_formula))
   if(!all(terms %in% colnames(data))) {
     missing_terms = terms[!terms %in% colnames(data)]
     stop(sprintf('terms %s missing from data',paste(missing_terms,sep=', ')))
@@ -25,14 +62,14 @@ GridLMM_GWAS_fast = function(error_model,test_model,reduced_model,data,Y = NULL,
   # -------- Response ---------- #
   n = nrow(data)
   if(is.null(Y)){
-    if(length(error_model) == 3){
-      # if(length(model) == 2) then there is no response
-      Y = as.matrix(data[,all.vars(error_model[[2]])])
+    if(length(formula) == 3){
+      # if(length(formula) == 2) then there is no response
+      Y = as.matrix(data[,all.vars(formula[[2]]),drop=FALSE])
     }
   }
   
   # -------- Constant Fixed effects ---------- #
-  X_cov = model.matrix(nobars(error_model),data)
+  X_cov = model.matrix(nobars(formula),data)
   linear_combos = caret::findLinearCombos(X_cov)
   if(!is.null(linear_combos$remove)) {
     cat(sprintf('dropping column(s) %s to make covariates full rank\n',paste(linear_combos$remove,sep=',')))
@@ -46,7 +83,7 @@ GridLMM_GWAS_fast = function(error_model,test_model,reduced_model,data,Y = NULL,
   
   if(is.null(V_setup)) {
     # -------- Random effects ---------- #
-    RE_setup = make_RE_setup(model = error_model,data,relmat = relmat,X = X,X_ID = X_ID,proximal_matrix = proximal_matrix,verbose=verbose)
+    RE_setup = make_RE_setup(formula = formula,data,relmat = relmat,X = X,X_ID = X_ID,proximal_matrix = proximal_matrix,verbose=verbose)
     V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K,drop0_tol,save_V_folder,verbose)
   } 
   
@@ -59,8 +96,8 @@ GridLMM_GWAS_fast = function(error_model,test_model,reduced_model,data,Y = NULL,
   
   # -------- Test and reduced models ---------- #
   # test model should is applied to each SNP. The intercept is the main effect, and any additional terms are multiplied by the SNP
-  mm_test = model.matrix(test_model,droplevels(data))
-  mm_reduced = model.matrix(reduced_model,droplevels(data))
+  mm_test = model.matrix(test_formula,droplevels(data))
+  mm_reduced = model.matrix(reduced_formula,droplevels(data))
   
   # -------- get starting value by EMMAX ---------- #
   # evaluate likelihoods on a grid, going until all LL's stop increasing
@@ -68,10 +105,10 @@ GridLMM_GWAS_fast = function(error_model,test_model,reduced_model,data,Y = NULL,
     if(verbose) print('Estimating h2_start via null model')
     if(ncol(Y) > 1) stop('EMMAX_start only implemented for a single response')
     if(method == 'BF') {
-      null_Bayes = GridLMM_posterior(error_model,data,V_setup = V_setup,h2_divisions=3,mc.cores = mc.cores)
+      null_Bayes = GridLMM_posterior(formula,data,V_setup = V_setup,h2_divisions=3,mc.cores = mc.cores)
       h2_start = matrix(colSums(null_Bayes$h2s_results$posterior*null_Bayes$h2s_results[,1:length(V_setup$ZKZts),drop=FALSE]),nr=1)
     } else{
-      null_ML = GridLMM_ML(error_model,data,V_setup = V_setup,tolerance = h2_start_tolerance,mc.cores = mc.cores)
+      null_ML = GridLMM_ML(formula,data,V_setup = V_setup,tolerance = h2_start_tolerance,mc.cores = mc.cores)
       ML = REML = FALSE
       if(method == 'ML') ML = TRUE
       if(method == 'REML' || method == 'BF') REML = TRUE

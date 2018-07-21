@@ -160,7 +160,7 @@ make_V_list = function(RE_setup,
     chol_V_list = c(chol_V_list,foreach::foreach(h2_index=group) %dopar% {
       h2s = h2s_matrix[,h2_index]
       V = diag((1-sum(h2s))/weights)  # include weights here. This should be the only place they are needed.
-      for(i in 1:n_RE) V = V + h2s[i] * ZKZts[[i]] * downdate_ratios[i]
+      for(i in 1:n_RE) V = V + h2s[i] * as.matrix(ZKZts[[i]]) * downdate_ratios[i]
       # test if V is diagonal or sparse
       non_zero_upper_tri_V = abs(V[upper.tri(V,diag = FALSE)]) > 1e-10
       if(sum(non_zero_upper_tri_V) == 0) {  # V is diagonal

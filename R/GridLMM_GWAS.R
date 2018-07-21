@@ -1,11 +1,34 @@
-GridLMM_GWAS = function(error_model,test_model,reduced_model,data,Y = NULL, weights = NULL,
+#' GridLMM GWAS with full grid search
+#'
+#' Performs a GWAS using a full grid search. Can perform LRTs, Wald-tests, or calculate Bayes Factors.
+#' 
+#' @details Uses the GridLMM appraoch to evalue ML or REML solutions for each test, or calculate posterior distributions.
+#'
+#' @inheritParams GridLMM_GWAS_fast
+#' @param h2_divisions Number of divisions of each variance component on grid
+#' @param EMMAX_start Should the null model be used to find a starting point for the grid?
+#' @param REML TRUE/FALSE. Should REML method be used? Will calculate Wald tests.
+#' @param ML  TRUE/FALSE. Should ML method be used? Will calculate LRT tests.
+#' @param BF  TRUE/FALSE. Should BF method be used? Will calculate Bayes Factors
+#' @param RE_setup Object containing variables for setting up error model with random effects. Can be re-passed to the function to re-run the same model.
+#' @param V_list_setup Object containing variables for setting up error model with random effects. Can be re-passed to the function to re-run the same model.
+#' @param chunkSize To save memory, the tests can be processed in chunks.
+#'
+#' @return A list with two elements:
+#' \item{results}{A data frame with each row the results of the association test for a column of \code{X}, plus asssociated parameter values and statistics.}
+#' \item{setup}{A list with several objects needed for re-running the model, including \code{RE_setup}, \code{V_list_setup} and \code{downdate_Xs}. 
+#'   These can be re-passed to this function (or other GridLMM functions) to re-fit the model to the same data.}
+#' @export
+#'
+#' @examples
+GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,Y = NULL, weights = NULL,
                        X,X_ID = 'ID',centerX = TRUE,scaleX = FALSE,fillNAX = FALSE,X_map = NULL, relmat = NULL,inv_prior_X = NULL,
-                       h2_divisions,EMMAX_start = TRUE,h2_EMMAX = NULL, REML = TRUE,ML = TRUE,BF = FALSE,proximal_matrix = NULL, 
-                       RE_setup = NULL, V_list = NULL, save_V_list = NULL,downdate_Xs = NULL,
+                       h2_divisions,EMMAX_start = TRUE,h2_start = NULL, REML = TRUE,ML = TRUE,BF = FALSE,proximal_matrix = NULL, 
+                       RE_setup = NULL, V_list_setup = NULL, save_V_list = NULL,downdate_Xs = NULL,
                        diagonalize=T,svd_K = T,drop0_tol = 1e-10,mc.cores = my_detectCores(),clusterType = 'mclapply',chunkSize = 10000,verbose=T) {
   
   # -------- check terms in models ---------- #
-  terms = c(all.vars(error_model), all.vars(test_model),all.vars(reduced_model))
+  terms = c(all.vars(formula), all.vars(test_formula),all.vars(reduced_formula))
   if(!all(terms %in% colnames(data))) {
     missing_terms = terms[!terms %in% colnames(data)]
     stop(sprintf('terms %s missing from data',paste(missing_terms,sep=', ')))
@@ -14,9 +37,9 @@ GridLMM_GWAS = function(error_model,test_model,reduced_model,data,Y = NULL, weig
   
   # -------- Response ---------- #
   if(is.null(Y)){
-    if(length(error_model) == 3){
+    if(length(formula) == 3){
       # if(length(model) == 2) then there is no response
-      Y = as.matrix(data[,all.vars(error_model[[2]])])
+      Y = as.matrix(data[,all.vars(formula[[2]]),drop=FALSE])
     }
   }
   if(nrow(Y) != nrow(data)) stop('nrow(Y) != nrow(data)')
@@ -27,7 +50,7 @@ GridLMM_GWAS = function(error_model,test_model,reduced_model,data,Y = NULL, weig
   n = nrow(data)
   
   # -------- Constant Fixed effects ---------- #
-  X_cov = model.matrix(nobars(error_model),data)
+  X_cov = model.matrix(nobars(formula),data)
   linear_combos = caret::findLinearCombos(X_cov)
   if(!is.null(linear_combos$remove)) {
     cat(sprintf('dropping column(s) %s to make covariates full rank\n',paste(linear_combos$remove,sep=',')))
@@ -42,28 +65,28 @@ GridLMM_GWAS = function(error_model,test_model,reduced_model,data,Y = NULL, weig
   
   # -------- Random effects ---------- #
   if(is.null(RE_setup)) {
-    RE_setup = make_RE_setup(model = error_model,data,relmat = relmat,X = X,X_ID = X_ID,proximal_matrix = proximal_matrix,verbose=verbose)
+    RE_setup = make_RE_setup(formula = formula,data,relmat = relmat,X = X,X_ID = X_ID,proximal_matrix = proximal_matrix,verbose=verbose)
   }
   
   if(!is.null(Y) && EMMAX_start && !BF) {
     # if reporting BF's, don't use EMMAX_start
-    if(!is.null(h2_EMMAX)) stop('h2_EMMAX should be NULL if EMMAX_start == TRUE')
+    if(!is.null(h2_start)) stop('h2_start should be NULL if EMMAX_start == TRUE')
     if(ncol(Y) > 1) stop('EMMAX_start only implemented for a single response')
-    # if(!all(names(RE_terms$cnms) %in% names(RE_setup))) stop('lme4qtl failed. Please run estimate h2_EMMAX directly')
+    # if(!all(names(RE_terms$cnms) %in% names(RE_setup))) stop('lme4qtl failed. Please run estimate h2_start directly')
     relmats = lapply(names(RE_setup),function(term) {
       K = RE_setup[[term]]$K
       diag(K) = diag(K) + 1e-10
       K
     })  # NOTE: adding small element to diagonal to "fix" eigenvalues < 0
     names(relmats) = names(RE_setup)
-    emmax <- lme4qtl::relmatLmer(error_model,data=data,relmat = relmats,weights = weights)
+    emmax <- lme4qtl::relmatLmer(formula,data=data,relmat = relmats,weights = weights)
     vars = as.data.frame(lme4::VarCorr(emmax))$vcov
-    h2_EMMAX = vars/sum(vars)
-    h2_EMMAX = h2_EMMAX[-length(h2_EMMAX)]
-    names(h2_EMMAX) = NULL
-    if(verbose) print(sprintf('EMMAX h2s: %s',paste(signif(h2_EMMAX,2),collapse=', ')))
+    h2_start = vars/sum(vars)
+    h2_start = h2_start[-length(h2_start)]
+    names(h2_start) = NULL
+    if(verbose) print(sprintf('EMMAX h2s: %s',paste(signif(h2_start,2),collapse=', ')))
   }
-  if(BF) h2_EMMAX = NULL
+  if(BF) h2_start = NULL
   
   
   
@@ -81,12 +104,12 @@ GridLMM_GWAS = function(error_model,test_model,reduced_model,data,Y = NULL, weig
     rm(downdate_X_matrices)
   } 
   
-  # -------- make V_list ---------- #
-  if(is.null(V_list)) {
+  # -------- make V_list_setup ---------- #
+  if(is.null(V_list_setup)) {
     V_list_setup = make_V_list(RE_setup,
                                weights,
                                h2_divisions,  
-                               h2_EMMAX,
+                               h2_start,
                                save_V_list,
                                diagonalize,
                                svd_K,
@@ -105,8 +128,8 @@ GridLMM_GWAS = function(error_model,test_model,reduced_model,data,Y = NULL, weig
   
   # -------- Test and reduced models ---------- #
   # test model should is applied to each SNP. The intercept is the main effect, and any additional terms are multiplied by the SNP
-  mm_test = model.matrix(test_model,droplevels(data))
-  mm_reduced = model.matrix(reduced_model,droplevels(data))
+  mm_test = model.matrix(test_formula,droplevels(data))
+  mm_reduced = model.matrix(reduced_formula,droplevels(data))
   
   if(!is.null(Y)) {
     n_tests = ncol(X)

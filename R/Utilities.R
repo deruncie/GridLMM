@@ -1,4 +1,4 @@
-make_RE_setup = function(model,data,relmat = NULL,X = NULL,X_ID = NULL,proximal_matrix = NULL,verbose = FALSE) {
+make_RE_setup = function(formula,data,relmat = NULL,X = NULL,X_ID = NULL,proximal_matrix = NULL,verbose = FALSE) {
   
   # -------- Random effects ---------- #
   RE_levels = list() # a list of levels for each of the random effects
@@ -31,8 +31,8 @@ make_RE_setup = function(model,data,relmat = NULL,X = NULL,X_ID = NULL,proximal_
   
   # use lme4 functions to parse random effects
   #  note: correlated random effects are not allowed. Will convert to un-correlated REs
-  RE_terms = mkReTrms(findbars(model),data,drop.unused.levels = FALSE)  # extracts terms and builds Zt matrices
-  if(!is.null(X_ID) && !X_ID %in% names(RE_terms$cnms)) warning(sprintf("No covariance given SNPs specified in error model. To specify, add a term like (1|%s)",X_ID))
+  RE_terms = mkReTrms(findbars(formula),data,drop.unused.levels = FALSE)  # extracts terms and builds Zt matrices
+  if(!is.null(X_ID) && !X_ID %in% names(RE_terms$cnms)) warning(sprintf("No covariance given SNPs specified in error formula. To specify, add a term like (1|%s)",X_ID))
   
   # construct the RE_setup list
   # contains:
@@ -268,7 +268,7 @@ make_chol_V_setup = function(V_setup,h2s){
   }
   downdate_ratios = V_setup$downdate_ratios
   V = (1-sum(h2s)) * V_setup$resid_V
-  for(i in 1:length(h2s)) V = V + h2s[i] * V_setup$ZKZts[[i]] * downdate_ratios[i]
+  for(i in 1:length(h2s)) V = V + h2s[i] * as.matrix(V_setup$ZKZts[[i]]) * downdate_ratios[i]
   # test if V is diagonal or sparse
   non_zero_upper_tri_V = abs(V[upper.tri(V,diag = FALSE)]) > 1e-10
   if(sum(non_zero_upper_tri_V) == 0) {  # V is diagonal
