@@ -1,0 +1,28 @@
+---
+title: "GridLMM"
+output: html_notebook
+---
+
+**GridLMM** is a package for fitting linear mixed models (LMMs) with multiple random effects.
+
+The fitting process is optimized for repeated evaluation of the random effect
+    model with different sets of fixed effects, ex. for GWAS analyses. The approximation
+    is due to the use of a discrete grid of possible values for the random effect variance
+    component proportions. We include functions for both frequentist and Bayesian GWAS, 
+    (Restricted) Maximum Likelihood evaluation, Bayesian Posterior inference of variance components,
+    and Lasso/Elastic Net fitting of high-dimensional models with random effects.
+    
+### Installation:
+```{r}
+devtools::install_github('deruncie/GridLMM')
+```
+
+### Main functions:
+
+- `GridLMM_ML`: estimates parameters of a LMM by (restricted) Maximum Likelihood
+- `GridLMM_posterior`: Approximates the posterior distribution of the variance component
+proportions of a LMM
+- `GridLMM_GWAS_fast`: Runs a GWAS with the error structure a LMM. Uses heuristics to efficiently sample the grid. Can run Wald tests (`method = 'REML'`), Likelihood ratio tests (`method = 'ML'`), or calculate Bayes Factors (`method = 'BF'`)
+- `GridLMM_GWAS`: Runs a GWAS as above, but with a complete grid
+- `GridLMMnet`: Fit a multiple regression with LASSO / elastic net penalty and mixed model error term.
+
