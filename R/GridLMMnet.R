@@ -2,7 +2,7 @@
 #'
 #' Finds LASSO or Elastic Net solutions for a multiple regression problem with correlated errors.
 #' 
-#' @details Finds the full LASSO or Elastic Net solution path by running \code{\link[glmnet]{glmnet}} at each grid vertex
+#' @details Finds the full LASSO or Elastic Net solution path by running \code{\link[glmnet]{glmnet}} at each grid vertex.
 #'
 #' @inheritParams GridLMM_GWAS
 #' @inheritParams glmnet::glmnet
