@@ -72,7 +72,7 @@ GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,Y = NULL, weig
     # if reporting BF's, don't use EMMAX_start
     if(!is.null(h2_start)) stop('h2_start should be NULL if EMMAX_start == TRUE')
     if(ncol(Y) > 1) stop('EMMAX_start only implemented for a single response')
-    null_ML = GridLMM_ML(formula,data,relmat = relmat,tolerance = 0.001,mc.cores = mc.cores)
+    null_ML = GridLMM_ML(formula,data,relmat = relmat,tolerance = 0.001,mc.cores = mc.cores,verbose=verbose)
     h2_start = get_current_h2s(null_ML$results,names(null_ML$setup$ZKZts),ML = ML,REML=REML)[1,]
     names(h2_start) = NULL
     if(verbose) print(sprintf('EMMAX h2s: %s',paste(signif(h2_start,2),collapse=', ')))

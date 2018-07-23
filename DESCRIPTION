@@ -13,7 +13,7 @@ Description: Fits approximate Linear Mixed Models multiple random effects. The
     (Restricted) Maximum Likelihood evaluation, Bayesian Posterior inference of variance components,
     and Lasso/Elastic Net fitting of high-dimensional models with random effects.
 License: MIT + file LICENSE
-Imports: 
+Imports:
     Rcpp (>= 0.12.16), 
     RcppEigen (>= 0.3.3.4.0),
     Matrix, 
@@ -28,3 +28,8 @@ Imports:
 LinkingTo: Rcpp, RcppEigen
 ByteCompile: TRUE
 RoxygenNote: 6.0.1
+Suggests: knitr,
+    rmarkdown,
+    qqman,
+    KRLS
+VignetteBuilder: knitr

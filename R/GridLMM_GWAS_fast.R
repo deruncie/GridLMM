@@ -105,10 +105,10 @@ GridLMM_GWAS_fast = function(formula,test_formula,reduced_formula,data,Y = NULL,
     if(verbose) print('Estimating h2_start via null model')
     if(ncol(Y) > 1) stop('EMMAX_start only implemented for a single response')
     if(method == 'BF') {
-      null_Bayes = GridLMM_posterior(formula,data,V_setup = V_setup,h2_divisions=3,mc.cores = mc.cores)
+      null_Bayes = GridLMM_posterior(formula,data,V_setup = V_setup,h2_divisions=3,mc.cores = mc.cores,verbose = verbose)
       h2_start = matrix(colSums(null_Bayes$h2s_results$posterior*null_Bayes$h2s_results[,1:length(V_setup$ZKZts),drop=FALSE]),nr=1)
     } else{
-      null_ML = GridLMM_ML(formula,data,V_setup = V_setup,tolerance = h2_start_tolerance,mc.cores = mc.cores)
+      null_ML = GridLMM_ML(formula,data,V_setup = V_setup,tolerance = h2_start_tolerance,mc.cores = mc.cores,verbose=verbose)
       ML = REML = FALSE
       if(method == 'ML') ML = TRUE
       if(method == 'REML' || method == 'BF') REML = TRUE
@@ -321,7 +321,7 @@ fit_GWAS_fast = function(Y,X_cov,X_list,h2_start,h2_step,V_setup,inv_prior_X = N
     
     n_steps = 1
     while(active && nrow(h2s_to_test) > 0) {   
-      print(sprintf('step: %d, num_h2s: %d, num active: %d',n_steps,nrow(h2s_to_test), sum(active)))
+      if(verbose) print(sprintf('step: %d, num_h2s: %d, num active: %d',n_steps,nrow(h2s_to_test), sum(active)))
       inner_cores = 1
       outer_cores = mc.cores
       registerDoParallel(outer_cores)
@@ -375,7 +375,7 @@ fit_GWAS_fast = function(Y,X_cov,X_list,h2_start,h2_step,V_setup,inv_prior_X = N
     results = c()
     
     while(sum(active_tests) > 0 && nrow(h2s_to_test) > 0) {
-      print(sprintf('step: %d, num_h2s: %d, num active: %d',n_steps,nrow(h2s_to_test), sum(active_tests)))
+      if(verbose) print(sprintf('step: %d, num_h2s: %d, num active: %d',n_steps,nrow(h2s_to_test), sum(active_tests)))
       
       active_X_list = which(active_tests)
       

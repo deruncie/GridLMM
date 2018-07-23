@@ -26,3 +26,10 @@ proportions of a LMM
 - `GridLMM_GWAS`: Runs a GWAS as above, but with a complete grid
 - `GridLMMnet`: Fit a multiple regression with LASSO / elastic net penalty and mixed model error term.
 
+### Examples:
+
+There is a vignette walking through the data format necessary for GridLMM and a few analyses using `GridLMM_GWAS_fast`
+```{r}
+vignette(topic = 'Running_GridLMM_GWAS',package='GridLMM')
+```
+

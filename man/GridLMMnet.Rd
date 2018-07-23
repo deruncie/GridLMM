@@ -93,5 +93,5 @@ An object with S3 class "glmnet","*" , where "*" is "elnet". See \code{\link[glm
 Finds LASSO or Elastic Net solutions for a multiple regression problem with correlated errors.
 }
 \details{
-Finds the full LASSO or Elastic Net solution path by running \code{\link[glmnet]{glmnet}} at each grid vertex
+Finds the full LASSO or Elastic Net solution path by running \code{\link[glmnet]{glmnet}} at each grid vertex.
 }
