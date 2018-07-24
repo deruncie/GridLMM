@@ -12,6 +12,8 @@ The fitting process is optimized for repeated evaluation of the random effect
     (Restricted) Maximum Likelihood evaluation, Bayesian Posterior inference of variance components,
     and Lasso/Elastic Net fitting of high-dimensional models with random effects.
     
+Please treat this as a Beta version and let me know of issues running the functions.    
+    
 ### Installation:
 ```{r}
 devtools::install_github('deruncie/GridLMM')
