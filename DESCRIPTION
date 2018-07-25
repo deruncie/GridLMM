@@ -5,7 +5,7 @@ Version: 0.0.0.9000
 Date: 2018-06-30
 Author: Daniel E Runcie
 Maintainer: Daniel Runcie <deruncie@ucdavis.edu>
-Description: Fits approximate Linear Mixed Models multiple random effects. The 
+Description: Fits approximate Linear Mixed Models with multiple random effects. The 
     fitting process is optimized for repeated evaluation of the random effect
     model with different sets of fixed effects, ex. for GWAS analyses. The approximation
     is due to the use of a discrete grid of possible values for the random effect variance
@@ -31,5 +31,6 @@ RoxygenNote: 6.0.1
 Suggests: knitr,
     rmarkdown,
     qqman,
-    KRLS
+    KRLS,
+    snpStats
 VignetteBuilder: knitr

@@ -27,6 +27,8 @@
 #' @param downdate_Xs A list providing information for updating GRMs based on proximal markers. 
 #'     Created based on \code{proximal_matrix} by this function, and can be re-passed to the function in future runs. 
 #' @param clusterType `mclapply`
+#' @param mc.cores Number of processor cores used for parallel evaluations. Note that if \code{clusterType = 'mclapply'}, the memory requires grow rapidly with \code{mc.cores}, because
+#'     the marker matrix gets duplicated in memory for each core.
 #'
 #' @return A list with two elements:
 #' \item{results}{A data frame with each row the results of the association test for a column of \code{X}, plus asssociated parameter values and statistics.}

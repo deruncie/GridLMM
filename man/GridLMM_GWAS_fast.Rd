@@ -78,7 +78,8 @@ by calculating the SVD of K, which can be slow for large samples.}
 
 \item{drop0_tol}{Values closer to zero than this will be set to zero when forming sparse matrices.}
 
-\item{mc.cores}{Number of cores to use for parallel evaluations.}
+\item{mc.cores}{Number of processor cores used for parallel evaluations. Note that if \code{clusterType = 'mclapply'}, the memory requires grow rapidly with \code{mc.cores}, because
+the marker matrix gets duplicated in memory for each core.}
 
 \item{clusterType}{`mclapply`}
 

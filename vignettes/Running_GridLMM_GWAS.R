@@ -1,62 +1,13 @@
----
-title: "Example showing how to run GridLMM_GWAS"
-author: "Daniel Runcie"
-date: "`r Sys.Date()`"
-output: 
-  rmarkdown::html_vignette:
-    toc: true
-vignette: >
-  %\VignetteIndexEntry{Running_GridLMM_GWAS}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
----
-
-
-```{r setup, include = FALSE}
+## ----setup, include = FALSE----------------------------------------------
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
-```
 
-`GridLMM_GWAS` and `GridLMM_GWAS_fast` implement an (approximate) linear mixed effect model GWAS that allows for multiple random effects.
-
-A typical GWAS includes a single random effect for Kinship - accounting for non-uniform relatedness among the observations.
-
-GxEMMA is useful in situations when there are additional sources of covariation among the observations. Examples could be:
-
-- **Multiple measures per genotype**. In this case, an additional random effect for genotype should be included
-that will account for non-additive genetic effects. The typical kinship matrix only models additive covariation among lines.
-    - An alternative with multiple measures is to simply average all observations per genotype into a single number and then
-    run a standard GWAS with among-genotype kinship. If the number of observations per genotype varies, then a `weights` parameter
-    can be added to GxEMMA with `weights = num_observations`.
-- **GxE covariation**. If the goal is to test for GxE effects, then accounting for GxE covariation can be important. This can
-be modeled my adding an additional covariance as `diag(env) %*% K %*% diag(env)`
-- **Spatial variation**. If there is spatial variation, the spatial distance can be modeled using a Kernel matrix (such as a squared-distance kernel).
-This is demonstrated below.
-
-## Package
-Install the package, then load:
-
-```{r}
+## ------------------------------------------------------------------------
 library(GridLMM)
-```
 
-
-## Load data
-Assuming `n` individuals, and `p` markers, the data inputs are:
-
-- `X`. An `n x p` matrix of marker genotypes
-- `map`. A SNP map describing chromosome positions of each marker
-- `data`. A data.frame that includes the phenotype, and columns for all covariates and IDs necessary for the model
-- `relmats`. The Kernel matrices needed for the model. The typical Genomic Relationship Matrix (GRM) Kernel can be calculated directly in the model,
-or can be loaded directly.
-
-### Example data
-
-Here is a simulated data set for running below. 
-Each genotype is grown in a single plot. Plots are arranged in a grid in the field.
-```{r}
+## ------------------------------------------------------------------------
 n_geno = 300
 n_chr = 5
 n_markers_per_chr = 1000
@@ -90,39 +41,21 @@ data$background = X %*% beta_background; data$background = data$background / sd(
 data$SNPs = X %*% beta;data$SNPs = data$SNPs/sd(data$SNPs)
 data$y = data$SNPs + sqrt(background_h2) * data$background + sqrt(1-background_h2) * data$micro_env
 data$y = data$y/sd(data$y)
-```
 
-**View the key data structures before proceeding**
-
-### Preparing the relmats
-Our model will have two random effects:
-
-1. Kinship: Typical additive relationship matrix.
-2. Spatial variation.
-
-Each random effect is modeled by including an appropriate Kernel matrix `K`. 
-This matrix must be positive-semidefinite, and have rownames corresponding to a column of `data`
-
-The kinship can be calculated directly by `GxEMMA_GWAS`. It will be calculated as:
-```{r}
+## ------------------------------------------------------------------------
 X_centered = sweep(X,2,colMeans(X),'-') # center marker genotypes
 K = tcrossprod(X_centered) / ncol(X_centered)
 rownames(K) = colnames(K) = rownames(X)
-```
 
-The spatial Kernel can be calculated using the squared distance, and a tuning parameter `h`. 
-This parameter must be chosen. A "default" choice is given below.
-```{r}
+## ------------------------------------------------------------------------
 library(KRLS)
 field = data[,c('Row','Col')]
 dists = as.matrix(dist(field))
 h = median(dists)
 K_plot = gausskernel(field,h^2/2); diag(K_plot)=1 # 
 rownames(K_plot) = colnames(K_plot) = data$Plot
-```
 
-Simulate some spatial variation in the field
-```{r}
+## ------------------------------------------------------------------------
 h2_spatial = 0.9
 s2_spatial = 1
 chol_K_plot = chol(h2_spatial*K_plot + diag(1-h2_spatial,nrow(data)))
@@ -131,14 +64,8 @@ field_error = 0*Plots
 field_error[data$Plot] = data$spatial_error
 image(field_error)
 data$y = data$y + data$spatial_error #
-```
 
-
-
-## Run GWAS
-The main function for running a GWAS is `GridLMM_GWAS_fast`
-
-```{r}
+## ------------------------------------------------------------------------
 gwas = GridLMM_GWAS_fast(
                         formula = y~1 + (1|Geno) + (1|Plot), # the same error model is used for each marker. It is specified similarly to lmer
                         test_formula = ~1, # this is the model for each marker. ~1 means an intercept for the marker. ~1 + cov means an intercept plus a slope on `cov` for each marker
@@ -159,37 +86,25 @@ gwas = GridLMM_GWAS_fast(
                         mc.cores = 1, # How many cores should be used for parallel processing. Unless X is large, tends to actually be faster with mc.cores = 1
                         verbose = FALSE # Should progress be printed to the screen?
 )
-```
 
-The output is a list with two elements
-```{r}
+## ------------------------------------------------------------------------
 names(gwas)
-```
 
-`setup` is parameters to re-run the model (say with a new X) like this:
-```{r}
+## ------------------------------------------------------------------------
 gwas2 = run_GWAS_fast(X,gwas$setup,h2_step = 0.01,max_steps = 100,method = 'ML',verbose = FALSE)
-```
 
-
-`results` contains a table of the gwas results
-```{r}
+## ------------------------------------------------------------------------
 head(gwas$results)
-```
 
-You can use the `qqman` package to make a manhattan plot and qqplot:
-```{r,message=FALSE}
+## ----message=FALSE-------------------------------------------------------
 library(qqman)
 # manhattan plot with true SNPs highlighted
 manhattan(gwas$results,'Chr','pos','p_value_REML','snp',highlight = colnames(X)[beta != 0])
 
 # qqplot 
 qq(gwas$results$p_value_REML)
-```
 
-Here's the same data run with only the GRM as a random effect
-
-```{r}
+## ------------------------------------------------------------------------
 gwas1 = GridLMM_GWAS_fast(
                         formula = y~1 + (1|Geno), # the same error model is used for each marker. It is specified similarly to lmer
                         test_formula = ~1, # this is the model for each marker. ~1 means an intercept for the marker. ~1 + cov means an intercept plus a slope on `cov` for each marker
@@ -210,21 +125,15 @@ gwas1 = GridLMM_GWAS_fast(
                         mc.cores = 1, # How many cores should be used for parallel processing. Unless X is large, tends to actually be faster with mc.cores = 1
                         verbose = FALSE # Should progress be printed to the screen?
 )
-```
-Plot comparing the p-values between the methods. Note the higher p-values and better qq distribution when modeling the spatial correlation
-```{r}
+
+## ------------------------------------------------------------------------
 plot(-log10(gwas$results$p_value_REML),-log10(gwas1$results$p_value_REML),col = (beta != 0)+1);abline(0,1)
 
 u = sort(-log10(runif(nrow(gwas$results))))
 plot(sort(-log10(gwas$results$p_value_REML))~u,pch=21,cex=.5);abline(0,1)
 points(sort(-log10(gwas1$results$p_value_REML))~u,pch=21,cex=.5,bg=2,col=NULL)
-```
 
-## Run GWAS for GxE using K_g and K_gxe
-This is following the idea from here:http://journals.plos.org/plosgenetics/article?id=10.1371/journal.pgen.1005849
-that suggested that just as you correct for genetic background with K = X %*% t(X) / ncol(X), you can also correct for GxE background
-
-```{r}
+## ------------------------------------------------------------------------
 # add a random environmental vector to data
 data$env = rnorm(nrow(data))
 
@@ -248,81 +157,38 @@ gxe_gwas = GridLMM_GWAS_fast(
                         mc.cores = 1, # How many cores should be used for parallel processing. Unless X is large, tends to actually be faster with mc.cores = 1
                         verbose = FALSE # Should progress be printed to the screen?
 )
-```
 
-The GxE p-values are in the slot `p_value_ML`, or `p_value_REML.2`. The slot `p_value_REML.1` contains the p-values for the genotype main effect.
-
-qq-plots
-```{r}
+## ------------------------------------------------------------------------
 u = sort(-log10(runif(nrow(gxe_gwas$results))))
 plot(sort(-log10(gxe_gwas$results$p_value_REML.1))~u,pch=21,cex=.5,main = 'SNP main effect');abline(0,1)
 plot(sort(-log10(gxe_gwas$results$p_value_REML.2))~u,pch=21,cex=.5,main = 'SNP gxe effect');abline(0,1)
-```
 
-
-## Running a bigger GWAS
-The above codes work for fairly small-scall GWAS applications. Once you get to thousands of individuals or 1 million + markers, holding the whole
-marker matrix `X` in memory can be limiting. 
-The best strategy currently is probably to break the analysis into chunks and analyze each chunk separately.
-We can still re-use the pre-calculate V decompositions across all chunks to save time.
-Commonly, data for GWAS is in PLINK format. We show here how to load that in chunks in R.
-
-The steps are:
-
-1. Estimate variance componenents using the null model. Save the pre-calculated decompositions to a folder on disk.
-1. Load the marker information data, select chunks of markers to process
-3. Load each chunk of markers separately, run GWAS
-4. Combine results together
-
-### Save example data in PLINK format
-```{r}
+## ------------------------------------------------------------------------
 library(snpStats)
 
 write.plink(file.base = 'test_data',snps = as(X,'SnpMatrix'),id = data$Geno,phenotype = data$y,
             chromosome = map$Chr,position = map$pos)
-```
 
-### Estimate variance componenents using null model
-This serves as a starting value for GridLMM_GWAS_fast.
-We use `GridLMM_ML` here. Other programs like `GCTA` could be used and would be much faster for this step.
-If the marker-based kinship matrices are not prec-calculated, this needs to be done (ex. with `GCTA`). 
-We do it here in R. It is possible to do this calculation in chunks as well.
-
-```{r}
+## ------------------------------------------------------------------------
 K_G = tcrossprod(X)/ncol(X)
-```
 
-
-The key here is to specify a folder with `save_V_folder`. This ay the pre-calculated matrices are saved and can be re-used.
-```{r}
+## ------------------------------------------------------------------------
 null_model = GridLMM_ML(formula = y~1 + (1|Geno) + (1|Plot),data = data,relmat = list(Geno = K_G, Plot = K_plot),REML = T,save_V_folder = 'V_folder',tolerance = 1e-3)
-```
 
-From the output, we want to extract two objects: The estimated variance componenets, and an object that stores paths to the pre-calculated matrices
-
-The variance components can be accessed as:
-```{r}
+## ------------------------------------------------------------------------
 null_model$results[,c('Geno.REML','Plot.REML')]
-```
 
-The setup object is:
-```{r}
+## ------------------------------------------------------------------------
 V_setup = null_model$setup
-```
 
-### Load marker information matrix, divide markers into chunks
-```{r}
+## ------------------------------------------------------------------------
 markers = read.delim('test_data.bim',header = F,row.names = NULL)
 nrow(markers)
-```
 
-Divide into groups
-```{r}
+## ------------------------------------------------------------------------
 chunks = split(1:nrow(markers),gl(10,nrow(markers)/10))
-```
 
-### Run GWAS for each chunk
-```{r}
+## ------------------------------------------------------------------------
 library(doParallel)
 library(foreach)
 full_results = foreach(chunk = chunks,i = 1:length(chunks),.combine = 'rbind') %do% {
@@ -343,10 +209,7 @@ full_results = foreach(chunk = chunks,i = 1:length(chunks),.combine = 'rbind') %
                                     verbose = F)
   results_chunk$results # return just the results
 }
-```
 
-Compare results - should be the same as if we had run all at once.
-```{r}
+## ------------------------------------------------------------------------
 plot(-log10(full_results$p_value_REML),-log10(gwas$results$p_value_REML));abline(0,1)
-```
 

@@ -3,6 +3,9 @@
 .RData
 .Ruserdata
 
+vignettes/test_data*
+vignettes/V_folder
+
 # C++ files
 src/*.o
 src/*.so
