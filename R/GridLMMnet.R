@@ -25,6 +25,8 @@ GridLMMnet = function(formula,data,X, weights = NULL,
                       diagonalize=T,svd_K = T,drop0_tol = 1e-10,mc.cores = parallel::detectCores(),clusterType = 'mclapply',verbose=T,...) 
 {
   
+  
+  cl = start_cluster(mc.cores,clusterType)
   setup = GridLMMnet_setup(formula,data,X,weights,
                            centerX,scaleX,relmat,
                            h2_divisions,h2_start,
@@ -32,6 +34,7 @@ GridLMMnet = function(formula,data,X, weights = NULL,
                            nfolds,foldid,
                            RE_setup,V_setup,save_V_folder,
                            diagonalize,svd_K,drop0_tol,mc.cores,clusterType,verbose,...)
+  if(inherits(cl,"cluster")) stopCluster(cl)
 
   lambda.min.ratio = setup$lambda.min.ratio
   
@@ -132,11 +135,9 @@ GridLMMnet_setup = function(formula,data,X, weights = NULL,
   }
   colnames(h2s_matrix) = NULL
   
-  if(clusterType == 'mclapply') {
-    registerDoParallel(mc.cores)
-  } else{
-    registerDoParallel(1)
-    if(verbose) pb = txtProgressBar(min=0,max = length(chol_V_list),style=3)
+  if(verbose) {
+    sprintf('Generating V decompositions for %d grid cells', ncol(h2s_matrix))
+    pb = txtProgressBar(min=0,max = ncol(h2s_matrix),style=3)
   }
   V_setup$chol_V_list = foreach(h2s = iter(h2s_matrix,by='col')) %dopar% {
     h2s = h2s[1,]
@@ -145,7 +146,7 @@ GridLMMnet_setup = function(formula,data,X, weights = NULL,
     if(verbose && exists('pb')) setTxtProgressBar(pb, getTxtProgressBar(pb)+1)
     return(chol_V_setup)
   }
-  if(verbose && mc.cores == 1 && exists('pb')) close(pb)
+  if(verbose && exists('pb')) close(pb)
   
   penalty.factor = c(rep(0,ncol(X_cov)),rep(1,ncol(X)))
   X_full = cbind(X_cov,X)
