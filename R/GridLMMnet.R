@@ -11,18 +11,46 @@
 #' @param foldid vector of integers that divide the data into a set of non-overlapping folds for cross-validation.
 #' @param ... 
 #'
-#' @return An object with S3 class "glmnet","*" , where "*" is "elnet". See \code{\link[glmnet]{glmnet}}.
+#' @return If \code{foldid} and \code{nfold} are null, an object with S3 class "glmnet","*" , where "*" is "elnet". See \code{\link[glmnet]{glmnet}}.
+#'     Otherwise, an object with S3 class "cv.glmnet". See \code{\link[glmnet]{cv.glmnet}}.
 #' @export
 #'
 #' @examples
 GridLMMnet = function(formula,data,X, weights = NULL, 
-                     centerX = TRUE,scaleX = TRUE,relmat = NULL,
-                     h2_divisions = 10, h2_start = NULL,
-                     alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001), lambda=NULL,
-                     nfolds = NULL,foldid = NULL,
-                     RE_setup = NULL, V_list_setup = NULL, save_V_list = NULL,
-                     diagonalize=T,svd_K = T,drop0_tol = 1e-10,mc.cores = parallel::detectCores(),clusterType = 'mclapply',verbose=T,...) 
+                      centerX = TRUE,scaleX = TRUE,relmat = NULL,
+                      h2_divisions = 10, h2_start = NULL,
+                      alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001), lambda=NULL,
+                      nfolds = NULL,foldid = NULL,
+                      RE_setup = NULL, V_setup = NULL, save_V_folder = NULL,
+                      diagonalize=T,svd_K = T,drop0_tol = 1e-10,mc.cores = parallel::detectCores(),clusterType = 'mclapply',verbose=T,...) 
 {
+  
+  setup = GridLMMnet_setup(formula,data,X,weights,
+                           centerX,scaleX,relmat,
+                           h2_divisions,h2_start,
+                           alpha,nlambda,substitute(lambda.min.ratio),lambda,
+                           nfolds,foldid,
+                           RE_setup,V_setup,save_V_folder,
+                           diagonalize,svd_K,drop0_tol,mc.cores,clusterType,verbose,...)
+
+  lambda.min.ratio = setup$lambda.min.ratio
+  
+  results = GridLMMnet2(setup,mc.cores,clusterType=clusterType,alpha, nlambda = nlambda, lambda.min.ratio = lambda.min.ratio, lambda=lambda,
+                        prediction_weights = weights, foldid = foldid,verbose=verbose,...)
+  
+  # returning elnet object. Don't think it's worth including the setup object too. I can add functionality to re-use V_list if passed.
+  return(results)
+  
+}
+
+GridLMMnet_setup = function(formula,data,X, weights = NULL, 
+                            centerX = TRUE,scaleX = TRUE,relmat = NULL,
+                            h2_divisions = 10, h2_start = NULL,
+                            alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001), lambda=NULL,
+                            nfolds = NULL,foldid = NULL,
+                            RE_setup = NULL, V_list_setup = NULL, save_V_folder = NULL,
+                            diagonalize=T,svd_K = T,drop0_tol = 1e-10,mc.cores = parallel::detectCores(),clusterType = 'mclapply',verbose=T,...) {
+ 
   
   # -------- sort by foldid ---------- #
   if(!is.null(nfolds)) {
@@ -34,9 +62,12 @@ GridLMMnet = function(formula,data,X, weights = NULL,
   }
   if(!is.null(foldid)){
     if(length(foldid) != nrow(data)) stop('wrong length of foldid')
-    data = data[order(foldid),,drop=FALSE]
-    X = X[order(foldid),,drop=FALSE]
-    foldid = foldid[order(foldid)]
+    data$original_order = 1:nrow(data)
+    new_order = order(foldid)
+    data = data[new_order,,drop=FALSE]
+    X = X[new_order,,drop=FALSE]
+    weights = weights[new_order]
+    foldid = foldid[new_order]
     diagonalize = F # can't diagonalize with cross-validation
   }
   
@@ -65,43 +96,93 @@ GridLMMnet = function(formula,data,X, weights = NULL,
     X_cov = X_cov[,-linear_combos$remove]
   }
   if(any(is.na(X_cov))) stop('Missing values in covariates')
+  intercept = 0
+  if(ncol(X_cov)>0 && all(X_cov[,1]==1)) intercept = 1
   
   nvars = ncol(X_cov) + ncol(X)
   
   # -------- Random effects ---------- #
   if(is.null(RE_setup)) {
     RE_setup = make_RE_setup(formula = formula,data,relmat = relmat,verbose=verbose)
+    V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K,drop0_tol,save_V_folder,verbose)
   }
   
-  V_list_setup = make_V_list(RE_setup,
-                             weights,
-                             h2_divisions,  
-                             h2_start,
-                             save_V_list,
-                             diagonalize,
-                             svd_K,
-                             drop0_tol,
-                             mc.cores,
-                             clusterType,
-                             verbose)
+  # -------- Form matrix of h2s to test ---------- #
+  RE_names = names(RE_setup)
+  n_RE = length(RE_names)
+  
+  if(length(h2_divisions) < n_RE){
+    if(length(h2_divisions) != 1) stop('Must provide either 1 h2_divisions parameter, or 1 for each random effect')
+    h2_divisions = rep(h2_divisions,n_RE)
+  }
+  if(is.null(names(h2_divisions))) {
+    names(h2_divisions) = RE_names
+  }
+  h2s_matrix = expand.grid(lapply(RE_names,function(re) seq(0,1,length = h2_divisions[[re]]+1)))
+  colnames(h2s_matrix) = RE_names
+  h2s_matrix = t(h2s_matrix[rowSums(h2s_matrix) < 1,,drop=FALSE])
+  if(!is.null(h2_start)) {
+    if(length(h2_start) != nrow(h2s_matrix)) stop('wrong length h2_start vector provided')
+    if(!is.null(names(h2_start))){
+      if(!all(rownames(h2s_matrix) %in% names(h2_start))) stop('missing h2s in h2_start')
+      h2s_matrix = cbind(h2s_matrix,h2_start[rownames(h2s_matrix)])
+    } else{
+      h2s_matrix = cbind(h2s_matrix,h2_start)
+    }
+  }
+  colnames(h2s_matrix) = NULL
+  
+  if(clusterType == 'mclapply') {
+    registerDoParallel(mc.cores)
+  } else{
+    registerDoParallel(1)
+    if(verbose) pb = txtProgressBar(min=0,max = length(chol_V_list),style=3)
+  }
+  V_setup$chol_V_list = foreach(h2s = iter(h2s_matrix,by='col')) %dopar% {
+    h2s = h2s[1,]
+    chol_V_setup = make_chol_V_setup(V_setup,h2s)
+    if(!is.null(V_setup$save_V_folder)) chol_V_setup = chol_V_setup$file  # only store file name if save_V_folder is provided
+    if(verbose && exists('pb')) setTxtProgressBar(pb, getTxtProgressBar(pb)+1)
+    return(chol_V_setup)
+  }
+  if(verbose && mc.cores == 1 && exists('pb')) close(pb)
+  
+  penalty.factor = c(rep(0,ncol(X_cov)),rep(1,ncol(X)))
+  X_full = cbind(X_cov,X)
+  
+  # standardize y going in - makes glmnet more stable
+  mean_y = mean(y)
+  sd_y = sd(y)
+  y = (y-mean_y)/sd_y
+  
+  Qt = V_setup$Qt
+  if(!is.null(Qt)){
+    y <- as.matrix(Qt %*% y)
+    X_full = as.matrix(Qt %*% X_full)
+  }
   
   setup = list(
-    X_cov = X_cov,
-    alpha = alpha,
-    V_list_setup = V_list_setup
+    y = y,
+    X_full = X_full,
+    intercept = intercept,
+    penalty.factor = penalty.factor,
+    foldid = foldid,
+    data = data,
+    mean_y = mean_y,
+    sd_y = sd_y,
+    weights = weights,
+    lambda.min.ratio = eval(lambda.min.ratio),
+    V_setup = V_setup,
+    h2s_matrix = h2s_matrix
   )
-  if(is.null(y)) return(setup)
   
-  results = GridLMMnet2(y,X_cov,X,V_list_setup,mc.cores,clusterType=clusterType,alpha, nlambda = nlambda, lambda.min.ratio = lambda.min.ratio, lambda=lambda,
-                        prediction_weights = weights, foldid = foldid,verbose=verbose,...)
-  
-  # returning elnet object. Don't think it's worth including the setup object too. I can add functionality to re-use V_list if passed.
-  return(results)
-  
+  return(setup)  
+   
 }
 
+
 run_glmnet_V = function(X_full,y, chol_V, alpha = alpha, 
-                      lambda = NULL,nlambda, lambda.min.ratio,get_max_lambda = FALSE,penalty.factor,holdOut = NULL,...){
+                        lambda = NULL,nlambda, lambda.min.ratio,get_max_lambda = FALSE,penalty.factor,holdOut = NULL,...){
   nobs = length(y)
   
   if(!is.null(holdOut)){
@@ -121,7 +202,7 @@ run_glmnet_V = function(X_full,y, chol_V, alpha = alpha,
   
   V_log_det = 2*sum(log(diag(chol_V)))
   
-  chol_V_inv = solve(chol_V)
+  chol_V_inv = as.matrix(solve(chol_V))
   
   # calculate a normalization constant based on V_inv
   ci = sum(chol_V_inv^2)/nobs # normalization constant based on trace of V_inv
@@ -130,8 +211,8 @@ run_glmnet_V = function(X_full,y, chol_V, alpha = alpha,
   chol_V_inv = chol_V_inv/sqrt(ci)
   V_log_det = -2*sum(log(diag(chol_V_inv)))
   
-  y_star = as.matrix(crossprod(chol_V_inv,y))
-  X_star = as.matrix(crossprod(chol_V_inv,X_full))
+  y_star = crossprod_cholR(chol_V_inv,y)
+  X_star = crossprod_cholR(chol_V_inv,X_full)
   sd_y_star = sd(y_star)*(nobs-1)/nobs
   
   intercept = FALSE
@@ -234,60 +315,47 @@ run_glmnet_V = function(X_full,y, chol_V, alpha = alpha,
 }
 
 
-GridLMMnet2 = function(y,X_cov,X,V_list_setup,mc.cores,clusterType = 'mclapply',alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001), lambda=NULL,
-                       prediction_weights = NULL,foldid = NULL,verbose = FALSE,...)
-{
+get_lambda_sequence = function(setup,alpha = 1,nlambda = 100,lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001),verbose = TRUE,...) {
+  
+  y = setup$y
+  X_full = setup$X_full
+  V_setup = setup$V_setup
+  penalty.factor = setup$penalty.factor
+  chol_V_list  = V_setup$chol_V_list
   nobs = length(y)
-  nvars = ncol(X_cov) + ncol(X)
-  if(clusterType == 'SNOW') {
-    cl = makeCluster(mc.cores)
-  } else{
-    cl = mc.cores
-  }
+  nvars = ncol(X_full)
   
-  if(is.character(V_list_setup)) {
-    V_list_setup = readRDS(V_list_setup)
-  } else if('setup_file' %in% names(V_list_setup)) {
-    chol_V_list = V_list_setup$chol_V_files
-    V_list_setup = readRDS(V_list_setup$setup)
-    V_list_setup$chol_V_list = chol_V_list
-  }
-  h2s_matrix   = V_list_setup$h2s_matrix
-  Qt           = V_list_setup$Qt
-  n_SNPs_RRM   = V_list_setup$n_SNPs_RRM # used to calcualte downdate_weights based on downdate_Xs
-  chol_V_list  = V_list_setup$chol_V_list
   
-  penalty.factor = c(rep(0,ncol(X_cov)),rep(1,ncol(X)))
-  X_full = cbind(X_cov,X)
-  
-  # standardize y going in - makes glmnet more stable
-  mean_y = mean(y)
-  sd_y = sd(y)
-  y = (y-mean_y)/sd_y
-  
-  if(!is.null(Qt)){
-    y <- as.matrix(Qt %*% y)
-    X_full = Qt %*% X_full
-  }
-  
-  registerDoParallel(cl)
   # find an appropriate range for lambda by running glmnet with nlambda=3 (minimum to get a stable value of lambda[1]) on each matrix
-  if(verbose) print(sprintf('running glmnet on %d matrices',length(chol_V_list)))
-  if(is.null(lambda)) {
-    results_prep <- foreach::foreach(chol_V_setup = chol_V_list,.combine = rbind) %dopar% {
-      if(is.character(chol_V_setup)) {
-        chol_V_setup <- readRDS(chol_V_setup)
-      }
-      run_glmnet_V(X_full,y,chol_V_setup$chol_V,alpha = alpha,get_max_lambda = TRUE,penalty.factor=penalty.factor,...)
+  if(verbose) print(sprintf('calculating lambda sequence for %d matrices',length(chol_V_list)))
+  results_prep <- foreach::foreach(chol_V_setup = chol_V_list,.combine = rbind,.packages = c('glmnet')) %dopar% {
+    if(is.character(chol_V_setup)) {
+      chol_V_setup <- readRDS(chol_V_setup)
     }
-    max_lambda = max(results_prep[,1])#results_prep[order(results_prep[,'score'])[1],'max_lambda']
-    # max_lambda = results_prep[order(results_prep[,'score'])[1],'max_lambda']  # this seems to work
-    min_lambda = max_lambda * lambda.min.ratio
-    lambda = exp(seq(log(max_lambda),log(min_lambda),length=nlambda))
+    run_glmnet_V(X_full,y,chol_V_setup$chol_V,alpha = alpha,get_max_lambda = TRUE,penalty.factor=penalty.factor,...)
   }
+  max_lambda = max(results_prep[,1])#results_prep[order(results_prep[,'score'])[1],'max_lambda']
+  # max_lambda = results_prep[order(results_prep[,'score'])[1],'max_lambda']  # this seems to work
+  min_lambda = max_lambda * lambda.min.ratio
+  lambda = exp(seq(log(max_lambda),log(min_lambda),length=nlambda))
   
-  # use this lambda for all.
-  results <- foreach::foreach(chol_V_setup = chol_V_list, h2_index = seq_along(chol_V_list)) %dopar% {
+  return(lambda)
+}
+
+
+run_GridLMMnet = function(setup,alpha = 1,lambda,verbose = TRUE,...) {
+  y = setup$y
+  X_full = setup$X_full
+  foldid = setup$foldid
+  V_setup = setup$V_setup
+  penalty.factor = setup$penalty.factor
+  chol_V_list  = V_setup$chol_V_list
+  
+  if(verbose) {
+    print(sprintf('running glmnet on %d grid cells',length(chol_V_list)))
+    pb = txtProgressBar(min=0,max = length(chol_V_list),style=3)
+  }
+  results <- foreach::foreach(chol_V_setup = chol_V_list, h2_index = seq_along(chol_V_list),.packages = c('glmnet')) %dopar% {
     if(is.character(chol_V_setup)) {
       chol_V_setup <- readRDS(chol_V_setup)
     }
@@ -301,12 +369,26 @@ GridLMMnet2 = function(y,X_cov,X,V_list_setup,mc.cores,clusterType = 'mclapply',
         return(res_i[c('scores','prediction_errors')])
       }
       res$cv_scores = sapply(res_list,function(x) x$scores)  # score for each fold for each lambda
-      res$cv_prediction_sses = sapply(res_list,function(x) x$prediction_sse) # prediction sse for each fold for each lambda
       res$prediction_errors = lapply(res_list,function(x) x$prediction_errors)
     }
+    
+    if(verbose) {
+      setTxtProgressBar(pb, getTxtProgressBar(pb)+1)
+    }
+    
     res
   }
-  if(inherits(cl,"cluster")) stopCluster(cl)
+  if(verbose) close(pb)
+  return(results)
+}
+
+collect_results_GridLMMnet = function(setup,results,lambda) {
+  mean_y = setup$mean_y
+  sd_y = setup$sd_y
+  h2s_matrix = setup$h2s_matrix
+  foldid = setup$foldid
+  prediction_weights = setup$weights
+  nobs = length(setup$y)
   
   res = results[[1]]$res.glmnet
   h2_indexes = sapply(results,function(x) x$h2_index)
@@ -323,7 +405,7 @@ GridLMMnet2 = function(y,X_cov,X,V_list_setup,mc.cores,clusterType = 'mclapply',
   # remove standardization of y
   res$nulldev = null_deviance * sd_y^2
   res$beta = beta * sd_y
-  if(ncol(X_cov)>0 && all(X_cov[,1]==1)){
+  if(setup$intercept == 1){
     res$a0 = res$beta[1,] + mean_y
     res$beta[1,] = 0
   }
@@ -373,7 +455,51 @@ GridLMMnet2 = function(y,X_cov,X,V_list_setup,mc.cores,clusterType = 'mclapply',
     res = c(res,glmnet::getmin(lambda,res$cvm,res$cvsd))
     class(res) = 'cv.glmnet'
   }
+  return(res)
+}
+
+start_cluster = function(mc.cores = my_detectCores(),type = 'mclapply',...) {
+  if(type == 'mclapply') {
+    cl = mc.cores
+  } else{
+    cl = makeCluster(mc.cores,type = type,...)
+  }
+  registerDoParallel(cl)
+  cl
+}
+
+GridLMMnet2 = function(setup,mc.cores,clusterType = 'mclapply',alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001), lambda=NULL,
+                       prediction_weights = NULL,foldid = NULL,verbose = FALSE,...)
+{
   
+  y = setup$y
+  X_full = setup$X_full
+  V_setup = setup$V_setup
+  foldid = setup$foldid
+  penalty.factor = setup$penalty.factor
+  mean_y = setup$mean_y
+  sd_y = setup$sd_y
+  prediction_weights = setup$weights
+  
+  h2s_matrix   = V_setup$h2s_matrix
+  chol_V_list  = V_setup$chol_V_list
+  
+  nobs = length(y)
+  
+  # find lambda sequence
+  if(is.null(lambda)) {
+    cl = start_cluster(mc.cores,clusterType)
+    lambda = get_lambda_sequence(setup,alpha = alpha,nlambda = nlambda,lambda.min.ratio = lambda.min.ratio,verbose = verbose,...)
+    if(inherits(cl,"cluster")) stopCluster(cl)
+  }
+  
+  # run glmnet across the grid, including cross-validation
+  cl = start_cluster(mc.cores,clusterType)
+  results = run_GridLMMnet(setup,alpha = alpha,lambda = lambda,verbose = verbose,...)
+  if(inherits(cl,"cluster")) stopCluster(cl)
+  
+  # collect all results
+  res = collect_results_GridLMMnet(setup,results,lambda)
   
   return(res)
 }

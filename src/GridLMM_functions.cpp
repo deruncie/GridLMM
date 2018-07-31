@@ -128,6 +128,13 @@ MatrixXd chol_dropRows(Map<MatrixXd> L,int start_row, int num_rows){
   return(Lnew);
 }
 
+// [[Rcpp::export()]]
+MatrixXd crossprod_cholR(Map<MatrixXd> chol_R, Map<MatrixXd> X){
+  // t(chol_R) %*% chol_R = K
+  // returns t(chol_R) %*% X
+  return(chol_R.transpose().triangularView<Lower>() * X);
+}
+
 
 // [[Rcpp::export()]]
 MatrixXd F_hats(

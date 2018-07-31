@@ -8,7 +8,7 @@ GridLMMnet(formula, data, X, weights = NULL, centerX = TRUE,
   scaleX = TRUE, relmat = NULL, h2_divisions = 10, h2_start = NULL,
   alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs < nvars, 0.01,
   1e-04), lambda = NULL, nfolds = NULL, foldid = NULL, RE_setup = NULL,
-  V_list_setup = NULL, save_V_list = NULL, diagonalize = T, svd_K = T,
+  V_setup = NULL, save_V_folder = NULL, diagonalize = T, svd_K = T,
   drop0_tol = 1e-10, mc.cores = parallel::detectCores(),
   clusterType = "mclapply", verbose = T, ...)
 }
@@ -71,8 +71,6 @@ If null, will be calculated using \link{GridLMM_ML}.}
 
 \item{RE_setup}{Object containing variables for setting up error model with random effects. Can be re-passed to the function to re-run the same model.}
 
-\item{V_list_setup}{Object containing variables for setting up error model with random effects. Can be re-passed to the function to re-run the same model.}
-
 \item{diagonalize}{If TRUE and the model includes only a single random effect, the "GEMMA" trick will be used to diagonalize V. This is done
 by calculating the SVD of K, which can be slow for large samples.}
 
@@ -90,7 +88,8 @@ the marker matrix gets duplicated in memory for each core.}
 \item{...}{}
 }
 \value{
-An object with S3 class "glmnet","*" , where "*" is "elnet". See \code{\link[glmnet]{glmnet}}.
+If \code{foldid} and \code{nfold} are null, an object with S3 class "glmnet","*" , where "*" is "elnet". See \code{\link[glmnet]{glmnet}}.
+    Otherwise, an object with S3 class "cv.glmnet". See \code{\link[glmnet]{cv.glmnet}}.
 }
 \description{
 Finds LASSO or Elastic Net solutions for a multiple regression problem with correlated errors.

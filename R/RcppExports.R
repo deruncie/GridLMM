@@ -17,6 +17,10 @@ chol_dropRows <- function(L, start_row, num_rows) {
     .Call('_GridLMM_chol_dropRows', PACKAGE = 'GridLMM', L, start_row, num_rows)
 }
 
+crossprod_cholR <- function(chol_R, X) {
+    .Call('_GridLMM_crossprod_cholR', PACKAGE = 'GridLMM', chol_R, X)
+}
+
 F_hats <- function(beta_hats, RSSs, V_star_L, n, b, m) {
     .Call('_GridLMM_F_hats', PACKAGE = 'GridLMM', beta_hats, RSSs, V_star_L, n, b, m)
 }
