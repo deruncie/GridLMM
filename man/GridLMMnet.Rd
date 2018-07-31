@@ -7,10 +7,10 @@
 GridLMMnet(formula, data, X, weights = NULL, centerX = TRUE,
   scaleX = TRUE, relmat = NULL, h2_divisions = 10, h2_start = NULL,
   alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs < nvars, 0.01,
-  1e-04), lambda = NULL, RE_setup = NULL, V_list_setup = NULL,
-  save_V_list = NULL, diagonalize = T, svd_K = T, drop0_tol = 1e-10,
-  mc.cores = parallel::detectCores(), clusterType = "mclapply",
-  verbose = T, ...)
+  1e-04), lambda = NULL, nfolds = NULL, foldid = NULL, RE_setup = NULL,
+  V_list_setup = NULL, save_V_list = NULL, diagonalize = T, svd_K = T,
+  drop0_tol = 1e-10, mc.cores = parallel::detectCores(),
+  clusterType = "mclapply", verbose = T, ...)
 }
 \arguments{
 \item{formula}{A two-sided linear formula as used in \code{\link[lme4]{lmer}} describing the fixed-effects
@@ -67,6 +67,8 @@ If null, will be calculated using \link{GridLMM_ML}.}
   on its warms starts for speed, and its often faster to fit a whole
   path than compute a single fit.}
 
+\item{foldid}{vector of integers that divide the data into a set of non-overlapping folds for cross-validation.}
+
 \item{RE_setup}{Object containing variables for setting up error model with random effects. Can be re-passed to the function to re-run the same model.}
 
 \item{V_list_setup}{Object containing variables for setting up error model with random effects. Can be re-passed to the function to re-run the same model.}
@@ -95,4 +97,5 @@ Finds LASSO or Elastic Net solutions for a multiple regression problem with corr
 }
 \details{
 Finds the full LASSO or Elastic Net solution path by running \code{\link[glmnet]{glmnet}} at each grid vertex.
+    If \code{foldid} is provided, cross-validation scores will be calculated.
 }

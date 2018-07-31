@@ -76,7 +76,7 @@ head(g4b$results)
 # Run GxEMMAnet
 library(glmnet)
 
-h2 = 0.7
+h2 = 0.5
 prop_X = 0.6
 
 p_g = 10 # include 10 coefficients
@@ -106,6 +106,10 @@ par(mfrow=c(2,1))
 cols = c(1,1,rep(2,p_g),rep(3,p_gxe),rep(3,p-p_g-p_gxe))
 plot(gLASSO,col=cols[-1],'lambda')
 plot(gLASSO_0,col=cols[-1],'lambda')
+
+gLcv = cv.glmnet(cbind(1,data$cov,X),y,alpha = 1,penalty.factor = c(0,0,rep(1,p)),standardize = FALSE,keep = T)
+gLASSOcv = GridLMMnet(y~cov + (1|Group),data,X,alpha = 1,h2_divisions = 8*4,diagonalize = F,foldid = gLcv$foldid,mc.cores = 8)
+plot(gLASSOcv)
 
 library(sommer)
 library(lme4)

@@ -30,6 +30,32 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// chol_update
+MatrixXd chol_update(MatrixXd L, MatrixXd X, int sign);
+RcppExport SEXP _GridLMM_chol_update(SEXP LSEXP, SEXP XSEXP, SEXP signSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< MatrixXd >::type L(LSEXP);
+    Rcpp::traits::input_parameter< MatrixXd >::type X(XSEXP);
+    Rcpp::traits::input_parameter< int >::type sign(signSEXP);
+    rcpp_result_gen = Rcpp::wrap(chol_update(L, X, sign));
+    return rcpp_result_gen;
+END_RCPP
+}
+// chol_dropRows
+MatrixXd chol_dropRows(Map<MatrixXd> L, int start_row, int num_rows);
+RcppExport SEXP _GridLMM_chol_dropRows(SEXP LSEXP, SEXP start_rowSEXP, SEXP num_rowsSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Map<MatrixXd> >::type L(LSEXP);
+    Rcpp::traits::input_parameter< int >::type start_row(start_rowSEXP);
+    Rcpp::traits::input_parameter< int >::type num_rows(num_rowsSEXP);
+    rcpp_result_gen = Rcpp::wrap(chol_dropRows(L, start_row, num_rows));
+    return rcpp_result_gen;
+END_RCPP
+}
 // F_hats
 MatrixXd F_hats(Map<MatrixXd> beta_hats, Map<MatrixXd> RSSs, Map<MatrixXd> V_star_L, int n, int b, int m);
 RcppExport SEXP _GridLMM_F_hats(SEXP beta_hatsSEXP, SEXP RSSsSEXP, SEXP V_star_LSEXP, SEXP nSEXP, SEXP bSEXP, SEXP mSEXP) {
@@ -116,6 +142,8 @@ END_RCPP
 static const R_CallMethodDef CallEntries[] = {
     {"_GridLMM_chol_c", (DL_FUNC) &_GridLMM_chol_c, 1},
     {"_GridLMM_premultiply_list_of_matrices", (DL_FUNC) &_GridLMM_premultiply_list_of_matrices, 2},
+    {"_GridLMM_chol_update", (DL_FUNC) &_GridLMM_chol_update, 3},
+    {"_GridLMM_chol_dropRows", (DL_FUNC) &_GridLMM_chol_dropRows, 3},
     {"_GridLMM_F_hats", (DL_FUNC) &_GridLMM_F_hats, 6},
     {"_GridLMM_log_det_of_XtX", (DL_FUNC) &_GridLMM_log_det_of_XtX, 3},
     {"_GridLMM_GridLMM_SS_dense_c", (DL_FUNC) &_GridLMM_GridLMM_SS_dense_c, 7},

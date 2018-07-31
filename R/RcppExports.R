@@ -9,6 +9,14 @@ premultiply_list_of_matrices <- function(Qt, X_list) {
     .Call('_GridLMM_premultiply_list_of_matrices', PACKAGE = 'GridLMM', Qt, X_list)
 }
 
+chol_update <- function(L, X, sign) {
+    .Call('_GridLMM_chol_update', PACKAGE = 'GridLMM', L, X, sign)
+}
+
+chol_dropRows <- function(L, start_row, num_rows) {
+    .Call('_GridLMM_chol_dropRows', PACKAGE = 'GridLMM', L, start_row, num_rows)
+}
+
 F_hats <- function(beta_hats, RSSs, V_star_L, n, b, m) {
     .Call('_GridLMM_F_hats', PACKAGE = 'GridLMM', beta_hats, RSSs, V_star_L, n, b, m)
 }
