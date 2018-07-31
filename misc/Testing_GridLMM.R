@@ -108,8 +108,9 @@ plot(gLASSO,col=cols[-1],'lambda')
 plot(gLASSO_0,col=cols[-1],'lambda')
 
 gLcv = cv.glmnet(cbind(1,data$cov,X),y,alpha = 1,penalty.factor = c(0,0,rep(1,p)),standardize = FALSE,keep = T)
-gLASSOcv = GridLMMnet(y~cov + (1|Group),data,X,alpha = 1,h2_divisions = 8*4,diagonalize = F,nfolds = 10,mc.cores = 8)
-plot(gLASSOcv)
+gLASSOcv = GridLMMnet(y~cov + (1|Group),data,X,alpha = 1,h2_divisions = 8*4,diagonalize = F,foldid = gLcv$foldid,mc.cores = 8)
+plot(gLASSOcv);points(log(gLcv$lambda),gLcv$cvm)
+plot(gLcv)
 
 library(sommer)
 library(lme4)

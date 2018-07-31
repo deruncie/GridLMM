@@ -333,7 +333,12 @@ GridLMMnet2 = function(y,X_cov,X,V_list_setup,mc.cores,clusterType = 'mclapply',
   res$lambda = lambda
   res$df = colSums(res$beta != 0) - 1
   
+  # clean up object. Temporary until I understand how to process these correctly
+  res$npasses = NA
+  
+  
   if(!is.null(foldid)){
+    # this is duplicating cv.glmnet, so returns a differently structured object
     # for each lambda, then for each fold, select best h2 by score, pull out this cvm
     # select a lambda
     min_scores_index_cv = sapply(seq_along(lambda),function(l) {
@@ -354,17 +359,21 @@ GridLMMnet2 = function(y,X_cov,X,V_list_setup,mc.cores,clusterType = 'mclapply',
     cvm = apply(cvraw, 2, weighted.mean, w = prediction_weights, na.rm = TRUE)
     cvsd = sqrt(apply(scale(cvraw, cvm, FALSE)^2, 2, weighted.mean,
                       w = prediction_weights, na.rm = TRUE)/(nobs - 1))
-    res$cvm = cvm
-    res$cvsd = cvsd
-    res$cvup = res$cvm + res$cvsd
-    res$cvlo = res$cvm - res$cvsd
+    res = list(
+      lambda = lambda,
+      cvm = cvm,
+      cvsd = cvsd,
+      cvup = cvm + cvsd,
+      cvlo = cvm - cvsd,
+      nzero = colSums(res$beta != 0),
+      name = "Mean-Squared Error",
+      glmnet.fit = res,
+      foldid = foldid
+    )
     res = c(res,glmnet::getmin(lambda,res$cvm,res$cvsd))
-    res$name = "Mean-Squared Error"
     class(res) = 'cv.glmnet'
   }
   
-  # clean up object. Temporary until I understand how to process these correctly
-  res$npasses = NA
   
   return(res)
 }
