@@ -29,7 +29,7 @@ GridLMMnet = function(formula,data,X, weights = NULL,
     if(!is.null(foldid)) {
       warning('using provided foldid, NOT nfolds')
     } else{
-      foldid = sample(rep(seq(nfolds), length = N))
+      foldid = sample(rep(seq(nfolds), length = nrow(data)))
     }
   }
   if(!is.null(foldid)){
@@ -101,10 +101,8 @@ GridLMMnet = function(formula,data,X, weights = NULL,
 }
 
 run_glmnet_V = function(X_full,y, chol_V, alpha = alpha, 
-                      lambda = NULL,nlambda, lambda.min.ratio,get_max_lambda = FALSE,penalty.factor,prediction_weights = NULL,holdOut = NULL,...){
+                      lambda = NULL,nlambda, lambda.min.ratio,get_max_lambda = FALSE,penalty.factor,holdOut = NULL,...){
   nobs = length(y)
-  if(is.null(prediction_weights)) prediction_weights = rep(1,nobs) # only used for weighting predictions
-  prediction_weights = prediction_weights/sum(prediction_weights)*nobs
   
   if(!is.null(holdOut)){
     if(length(holdOut) != nobs) stop('wrong length of foldid')
@@ -113,7 +111,6 @@ run_glmnet_V = function(X_full,y, chol_V, alpha = alpha,
     # first pull out validation set
     y_sub = y[holdOut]
     X_sub = X_full[holdOut,,drop=FALSE]
-    prediction_weights_sub = prediction_weights[holdOut]
     chol_V_full = chol_V
     
     # now reduce data to only training set to fit model
@@ -222,7 +219,7 @@ run_glmnet_V = function(X_full,y, chol_V, alpha = alpha,
   scores = (nobs*log(2*pi) + nobs*log(s2_hats) + V_log_det + nobs)
   
   # predicting in held-out set
-  prediction_sse = NULL
+  prediction_errors = NULL
   if(!is.null(holdOut)){
     # if(sum(chol_V != 0) > nobs) recover()
     # want X_1*beta_hat + V_12 * V_22^{-1}(y-X_2*b_hat)
@@ -230,11 +227,10 @@ run_glmnet_V = function(X_full,y, chol_V, alpha = alpha,
     
     predicted = as.matrix(X_sub %*% res$beta) + as.matrix((t(chol_V_full[,holdOut]) %*% chol_V_full[,!holdOut]) %*% chol_V_inv %*% errors) * ci
     prediction_errors = y_sub - predicted
-    prediction_sse=colSums(as.matrix(prediction_errors * prediction_weights_sub)^2)  
   }
   return(list(V_log_det = V_log_det,res.glmnet = res,scores = scores, lambda = lambda,
               deviance = RSSs,null_deviance = sum((y_star-mean(y_star))^2),s2 = s2_hats,
-              prediction_sse=prediction_sse))
+              prediction_errors = prediction_errors))
 }
 
 
@@ -301,11 +297,12 @@ GridLMMnet2 = function(y,X_cov,X,V_list_setup,mc.cores,clusterType = 'mclapply',
       nfolds = max(foldid)
       res_list = foreach::foreach(i = seq(nfolds)) %do% {
         holdOut = foldid == i
-        res_i = run_glmnet_V(X_full,y,chol_V_setup$chol_V,alpha = alpha,lambda=lambda,penalty.factor=penalty.factor,prediction_weights = prediction_weights,holdOut = holdOut,...)
-        return(res_i[c('scores','prediction_sse')])
+        res_i = run_glmnet_V(X_full,y,chol_V_setup$chol_V,alpha = alpha,lambda=lambda,penalty.factor=penalty.factor,holdOut = holdOut,...)
+        return(res_i[c('scores','prediction_errors')])
       }
       res$cv_scores = sapply(res_list,function(x) x$scores)  # score for each fold for each lambda
       res$cv_prediction_sses = sapply(res_list,function(x) x$prediction_sse) # prediction sse for each fold for each lambda
+      res$prediction_errors = lapply(res_list,function(x) x$prediction_errors)
     }
     res
   }
@@ -339,16 +336,26 @@ GridLMMnet2 = function(y,X_cov,X,V_list_setup,mc.cores,clusterType = 'mclapply',
   if(!is.null(foldid)){
     # for each lambda, then for each fold, select best h2 by score, pull out this cvm
     # select a lambda
-    sse_folds = foreach::foreach(l = seq_along(lambda),.combine = 'rbind') %do% {
+    min_scores_index_cv = sapply(seq_along(lambda),function(l) {
       # go through all h2's, pull out score vectors for each fold: (n(fold) x n(h2) matrix)
       lambda_scores_cv = sapply(results,function(x) x$cv_scores[l,])
       # for each fold, find the index of the smallest (best) score
-      min_scores_index_cv = apply(lambda_scores_cv,1,which.min)
-      # now, go back and pull out the sse for each fold corresponding to the best score
-      sapply(seq_along(min_scores_index_cv),function(i) results[[min_scores_index_cv[i]]]$cv_prediction_sses[l,i])
-    }
-    res$cvm = rowSums(sse_folds)/nobs # sum of sses divided by n
-    res$cvsd = apply(sweep(sse_folds,2,tapply(foldid,foldid,length),'/'),1,sd) # SD of the sses. NOT THE SAME AS cv.glmnet!
+      apply(lambda_scores_cv,1,which.min)
+    })
+    # pull out prediction_errors for selected models for each fold
+    cvraw = sapply(seq_along(lambda),function(l) {
+      indexes = min_scores_index_cv[,l]
+      do.call(c,lapply(seq_along(indexes),function(i) results[[indexes[[i]]]]$prediction_errors[[i]][,l]))^2
+    })
+    # remove standardization of y
+    cvraw = cvraw*sd_y^2
+    # weight cvraw
+    if(is.null(prediction_weights)) prediction_weights = rep(1,nobs)
+    cvm = apply(cvraw, 2, weighted.mean, w = prediction_weights, na.rm = TRUE)
+    cvsd = sqrt(apply(scale(cvraw, cvm, FALSE)^2, 2, weighted.mean,
+                      w = prediction_weights, na.rm = TRUE)/(nobs - 1))
+    res$cvm = cvm
+    res$cvsd = cvsd
     res$cvup = res$cvm + res$cvsd
     res$cvlo = res$cvm - res$cvsd
     res = c(res,glmnet::getmin(lambda,res$cvm,res$cvsd))
