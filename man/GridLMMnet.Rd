@@ -31,8 +31,6 @@ are not implemented, so using one or two vertical bars (\code{|}) or one is iden
 The names of the matrices should correspond to the columns in \code{data} that are used as grouping factors. All levels
 of the grouping factor should appear as rownames of the corresponding matrix.}
 
-\item{h2_divisions}{Number of divisions of each variance component on grid}
-
 \item{h2_start}{Optional. Matrix with each row a vector of \eqn{h^2} parameters defining starting values for the grid. Typically ML/REML solutions for the null model. 
 If null, will be calculated using \link{GridLMM_ML}.}
 
@@ -69,7 +67,11 @@ If null, will be calculated using \link{GridLMM_ML}.}
 
 \item{foldid}{vector of integers that divide the data into a set of non-overlapping folds for cross-validation.}
 
-\item{RE_setup}{Object containing variables for setting up error model with random effects. Can be re-passed to the function to re-run the same model.}
+\item{V_setup}{Optional. A list produced by a GridLMM function containing the pre-processed V decompositions for each grid vertex, 
+or the information necessary to create this. Generally saved from a previous run of GridLMM on the same data.}
+
+\item{save_V_folder}{Optional. A character vector giving a folder to save pre-processed V decomposition files for future / repeated use. 
+If null, V decompositions are stored in memory}
 
 \item{diagonalize}{If TRUE and the model includes only a single random effect, the "GEMMA" trick will be used to diagonalize V. This is done
 by calculating the SVD of K, which can be slow for large samples.}

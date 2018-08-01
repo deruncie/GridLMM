@@ -5,7 +5,7 @@
 #' @details Finds the full LASSO or Elastic Net solution path by running \code{\link[glmnet]{glmnet}} at each grid vertex.
 #'     If \code{foldid} is provided, cross-validation scores will be calculated.
 #'
-#' @inheritParams GridLMM_GWAS
+#' @inheritParams GridLMM_GWAS_fast
 #' @inheritParams glmnet::glmnet
 #' @param X Variables in model that well be penalized with the elastic net penalty. Covariates specified in \code{formula} are not penalized.
 #' @param foldid vector of integers that divide the data into a set of non-overlapping folds for cross-validation.
