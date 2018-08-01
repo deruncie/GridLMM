@@ -113,7 +113,7 @@ plot(gLASSOcv);points(log(gLcv$lambda),gLcv$cvm)
 plot(gLcv)
 
 cl = start_cluster(8,'FORK')
-gLASSO_setup = GridLMMnet_setup(y~cov + (1|Group),data,X,alpha = 1,h2_divisions = 8*4,diagonalize = F,foldid = gLcv$foldid,mc.cores = 8, save_V_folder = 'V_folder')
+gLASSO_setup = GridLMMnet_setup(y~cov + (1|Group) + (1|ID),data,X,alpha = 1,h2_divisions = 8*4,diagonalize = F,foldid = gLcv$foldid,mc.cores = 8, save_V_folder = 'V_folder')
 lambda = get_lambda_sequence(gLASSO_setup,alpha = 1)
 cl = start_cluster(8,'FORK')
 results = run_GridLMMnet(gLASSO_setup,alpha = 1,lambda=lambda)

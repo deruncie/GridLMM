@@ -139,7 +139,8 @@ GridLMMnet_setup = function(formula,data,X, weights = NULL,
     sprintf('Generating V decompositions for %d grid cells', ncol(h2s_matrix))
     pb = txtProgressBar(min=0,max = ncol(h2s_matrix),style=3)
   }
-  V_setup$chol_V_list = foreach(h2s = iter(h2s_matrix,by='col')) %dopar% {
+  
+  V_setup$chol_V_list = foreach(h2s = iter(t(h2s_matrix),by='row')) %dopar% {
     h2s = h2s[1,]
     chol_V_setup = make_chol_V_setup(V_setup,h2s)
     if(!is.null(V_setup$save_V_folder)) chol_V_setup = chol_V_setup$file  # only store file name if save_V_folder is provided
