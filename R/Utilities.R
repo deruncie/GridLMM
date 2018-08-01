@@ -660,3 +660,19 @@ compile_results = function(results_list){
   return(results)
 }
 
+
+
+start_cluster = function(mc.cores = my_detectCores(),type = 'mclapply',...) {
+  if(type == 'mclapply') {
+    cl = mc.cores
+  } else{
+    cl = makeCluster(mc.cores,type = type,...)
+  }
+  registerDoParallel(cl)
+  cl
+}
+
+stop_cluster = function(cl){
+  try(parallel::stopCluster(cl))
+  foreach::registerDoSEQ()
+}

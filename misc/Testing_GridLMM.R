@@ -112,13 +112,18 @@ gLASSOcv = GridLMMnet(y~cov + (1|Group),data,X,alpha = 1,h2_divisions = 8*4,diag
 plot(gLASSOcv);points(log(gLcv$lambda),gLcv$cvm)
 plot(gLcv)
 
+gLASSO_setup = GridLMMnet_setup(y~cov + (1|Group),data,X,alpha = 1,diagonalize = F,foldid = gLcv$foldid,mc.cores = 8, save_V_folder = 'V_folder')
+gLASSO_setup$h2s_matrix = setup_Grid(names(gLASSO_setup$V_setup$RE_setup),h2_divisions = 8*4)
 cl = start_cluster(8,'FORK')
-gLASSO_setup = GridLMMnet_setup(y~cov + (1|Group) + (1|ID),data,X,alpha = 1,h2_divisions = 8*4,diagonalize = F,foldid = gLcv$foldid,mc.cores = 8, save_V_folder = 'V_folder')
+gLASSO_setup$V_setup = calculate_Grid(gLASSO_setup$V_setup,gLASSO_setup$h2s_matrix)
+stop_cluster(cl)
+registerDoSEQ()
+
 lambda = get_lambda_sequence(gLASSO_setup,alpha = 1)
 cl = start_cluster(8,'FORK')
 results = run_GridLMMnet(gLASSO_setup,alpha = 1,lambda=lambda)
 gLASSOcv2 = collect_results_GridLMMnet(gLASSO_setup,results,lambda)
-stopCluster(cl)
+stop_cluster(cl)
 plot(gLASSOcv)
 plot(gLASSOcv2)
 

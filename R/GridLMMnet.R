@@ -25,30 +25,49 @@ GridLMMnet = function(formula,data,X, weights = NULL,
                       diagonalize=T,svd_K = T,drop0_tol = 1e-10,mc.cores = parallel::detectCores(),clusterType = 'mclapply',verbose=T,...) 
 {
   
+  # ----------- setup model ------------- #
   
-  cl = start_cluster(mc.cores,clusterType)
   setup = GridLMMnet_setup(formula,data,X,weights,
                            centerX,scaleX,relmat,
-                           h2_divisions,h2_start,
                            alpha,nlambda,substitute(lambda.min.ratio),lambda,
                            nfolds,foldid,
                            RE_setup,V_setup,save_V_folder,
                            diagonalize,svd_K,drop0_tol,mc.cores,clusterType,verbose,...)
+  nobs = length(setup$y)
+  nvars = ncol(setup$X_full)
+  
+  
+  # ----------- setup Grid ------------- #
+  setup$h2s_matrix = setup_Grid(names(setup$V_setup$RE_setup),h2_divisions,h2_start)
+  
+  cl = start_cluster(mc.cores,clusterType)
+  setup$V_setup = calculate_Grid(setup$V_setup,setup$h2s_matrix,verbose)
   if(inherits(cl,"cluster")) stopCluster(cl)
 
-  lambda.min.ratio = setup$lambda.min.ratio
+  # ----------- run model ------------- #
+
+  # find lambda sequence
+  if(is.null(lambda)) {
+    cl = start_cluster(mc.cores,clusterType)
+    lambda = get_lambda_sequence(setup,alpha = alpha,nlambda = nlambda,lambda.min.ratio = lambda.min.ratio,verbose = verbose,...)
+    if(inherits(cl,"cluster")) stopCluster(cl)
+  }
   
-  results = GridLMMnet2(setup,mc.cores,clusterType=clusterType,alpha, nlambda = nlambda, lambda.min.ratio = lambda.min.ratio, lambda=lambda,
-                        prediction_weights = weights, foldid = foldid,verbose=verbose,...)
+  # run glmnet across the grid, including cross-validation
+  cl = start_cluster(mc.cores,clusterType)
+  grid_results_list = run_GridLMMnet(setup,alpha = alpha,lambda = lambda,verbose = verbose,...)
+  if(inherits(cl,"cluster")) stopCluster(cl)
   
-  # returning elnet object. Don't think it's worth including the setup object too. I can add functionality to re-use V_list if passed.
-  return(results)
+  # collect all results
+  res = collect_results_GridLMMnet(setup,grid_results_list,lambda)
+  
+  return(res)
+  
   
 }
 
 GridLMMnet_setup = function(formula,data,X, weights = NULL, 
                             centerX = TRUE,scaleX = TRUE,relmat = NULL,
-                            h2_divisions = 10, h2_start = NULL,
                             alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001), lambda=NULL,
                             nfolds = NULL,foldid = NULL,
                             RE_setup = NULL, V_list_setup = NULL, save_V_folder = NULL,
@@ -109,46 +128,6 @@ GridLMMnet_setup = function(formula,data,X, weights = NULL,
     RE_setup = make_RE_setup(formula = formula,data,relmat = relmat,verbose=verbose)
     V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K,drop0_tol,save_V_folder,verbose)
   }
-  
-  # -------- Form matrix of h2s to test ---------- #
-  RE_names = names(RE_setup)
-  n_RE = length(RE_names)
-  
-  if(length(h2_divisions) < n_RE){
-    if(length(h2_divisions) != 1) stop('Must provide either 1 h2_divisions parameter, or 1 for each random effect')
-    h2_divisions = rep(h2_divisions,n_RE)
-  }
-  if(is.null(names(h2_divisions))) {
-    names(h2_divisions) = RE_names
-  }
-  h2s_matrix = expand.grid(lapply(RE_names,function(re) seq(0,1,length = h2_divisions[[re]]+1)))
-  colnames(h2s_matrix) = RE_names
-  h2s_matrix = t(h2s_matrix[rowSums(h2s_matrix) < 1,,drop=FALSE])
-  if(!is.null(h2_start)) {
-    if(length(h2_start) != nrow(h2s_matrix)) stop('wrong length h2_start vector provided')
-    if(!is.null(names(h2_start))){
-      if(!all(rownames(h2s_matrix) %in% names(h2_start))) stop('missing h2s in h2_start')
-      h2s_matrix = cbind(h2s_matrix,h2_start[rownames(h2s_matrix)])
-    } else{
-      h2s_matrix = cbind(h2s_matrix,h2_start)
-    }
-  }
-  colnames(h2s_matrix) = NULL
-  
-  if(verbose) {
-    sprintf('Generating V decompositions for %d grid cells', ncol(h2s_matrix))
-    pb = txtProgressBar(min=0,max = ncol(h2s_matrix),style=3)
-  }
-  
-  V_setup$chol_V_list = foreach(h2s = iter(t(h2s_matrix),by='row')) %dopar% {
-    h2s = h2s[1,]
-    chol_V_setup = make_chol_V_setup(V_setup,h2s)
-    if(!is.null(V_setup$save_V_folder)) chol_V_setup = chol_V_setup$file  # only store file name if save_V_folder is provided
-    if(verbose && exists('pb')) setTxtProgressBar(pb, getTxtProgressBar(pb)+1)
-    return(chol_V_setup)
-  }
-  if(verbose && exists('pb')) close(pb)
-  
   penalty.factor = c(rep(0,ncol(X_cov)),rep(1,ncol(X)))
   X_full = cbind(X_cov,X)
   
@@ -174,12 +153,60 @@ GridLMMnet_setup = function(formula,data,X, weights = NULL,
     sd_y = sd_y,
     weights = weights,
     lambda.min.ratio = eval(lambda.min.ratio),
-    V_setup = V_setup,
-    h2s_matrix = h2s_matrix
+    V_setup = V_setup
   )
   
   return(setup)  
    
+}
+
+
+setup_Grid = function(RE_names,h2_divisions,h2_start = NULL){
+  
+  # -------- Form matrix of h2s to test ---------- #
+  n_RE = length(RE_names)
+  
+  if(length(h2_divisions) < n_RE){
+    if(length(h2_divisions) != 1) stop('Must provide either 1 h2_divisions parameter, or 1 for each random effect')
+    h2_divisions = rep(h2_divisions,n_RE)
+  }
+  if(is.null(names(h2_divisions))) {
+    names(h2_divisions) = RE_names
+  }
+  h2s_matrix = expand.grid(lapply(RE_names,function(re) seq(0,1,length = h2_divisions[[re]]+1)))
+  colnames(h2s_matrix) = RE_names
+  h2s_matrix = t(h2s_matrix[rowSums(h2s_matrix) < 1,,drop=FALSE])
+  if(!is.null(h2_start)) {
+    if(length(h2_start) != nrow(h2s_matrix)) stop('wrong length h2_start vector provided')
+    if(!is.null(names(h2_start))){
+      if(!all(rownames(h2s_matrix) %in% names(h2_start))) stop('missing h2s in h2_start')
+      h2s_matrix = cbind(h2s_matrix,h2_start[rownames(h2s_matrix)])
+    } else{
+      h2s_matrix = cbind(h2s_matrix,h2_start)
+    }
+  }
+  colnames(h2s_matrix) = NULL
+  
+  return(h2s_matrix)
+}
+
+calculate_Grid = function(V_setup,h2s_matrix,verbose = TRUE){
+  
+  if(verbose) {
+    sprintf('Generating V decompositions for %d grid cells', ncol(h2s_matrix))
+    pb = txtProgressBar(min=0,max = ncol(h2s_matrix),style=3)
+  }
+  
+  V_setup$chol_V_list = foreach(h2s = iter(t(h2s_matrix),by='row')) %dopar% {
+    h2s = h2s[1,]
+    chol_V_setup = make_chol_V_setup(V_setup,h2s)
+    if(!is.null(V_setup$save_V_folder)) chol_V_setup = chol_V_setup$file  # only store file name if save_V_folder is provided
+    if(verbose && exists('pb')) setTxtProgressBar(pb, getTxtProgressBar(pb)+1)
+    return(chol_V_setup)
+  }
+  if(verbose && exists('pb')) close(pb)
+  
+  return(V_setup)
 }
 
 
@@ -281,23 +308,6 @@ run_glmnet_V = function(X_full,y, chol_V, alpha = alpha,
   penalty.factor = penalty.factor*(length(penalty.factor)-1)/sum(penalty.factor) # adjust penalty.factor to sum to p-1 (for intercept)
   penalties = colSums(sweep(penalty.factor*((1-alpha)/2*res$beta^2 + alpha*abs(res$beta)),2,lambda,'*')) # from: https://web.stanford.edu/~hastie/glmnet/glmnet_alpha.html
   
-  # score function taken from: Schelldorfer, J., Bühlmann, P., & DE GEER, S. V. (2011). Estimation for High-Dimensional Linear Mixed-Effects Models Using ℓ1-Penalization. Scandinavian Journal of Statistics, 38(2), 197–214. http://doi.org/10.1111/j.1467-9469.2011.00740.x
-  # except that their V includes \hat{sigma}. This doesn't make sense to me. This parameter isn't in the normal LASSO score.
-  # I've taken it out here, and it seems to work, I think.
-  # Rakitsch et al 2013 Bioinformatics also shows the LASSOlmm score, but they have a fixed residual covariance, and so doesn't have to worry about |V|.
-  # scores = V_log_det/2 + RSSs/2 + nobs*penalties  # multiply penalties by nobs because of how glmnet calculates penalty. #not sure if this is needed: nobs*log(s2_hats)/2 + 
-  
-  # -2 times penalized log-Likelihood function. This gives basically the same different answers. Slightly different h2s.
-  # s2_hats = RSSs/nobs
-  # scores = (nobs*log(2*pi) + nobs*log(s2_hats) + V_log_det + nobs) + 2*nobs*penalties
-  
-  # I think this one is correct. I've changed the log-likelihood be:
-  #    -1/2(n/log(2*pi) + nlog(s2) + log|V| + 1/s2*((y-Xb)^t V^{-1} (y-Xb) + tau*P(b)))
-  #    where tau = 2*n*lambda and |V| == 1
-  #    This is maximized with respect to b when (y-Xb)^t V^{-1} (y-Xb) + tau*P(b) is minimized
-  #    This is equivalent to minimizing 1/2RSS/n + lambda*P(b) which is the glmnet criteria
-  #    Given \hat{b}, s2_hat = (RSS + 2*n*P(b))/n
-  # The score is -2 time penalized log-Likelihood
   s2_hats = (RSSs + 2*nobs*penalties)/nobs
   scores = (nobs*log(2*pi) + nobs*log(s2_hats) + V_log_det + nobs)
   
@@ -460,48 +470,3 @@ collect_results_GridLMMnet = function(setup,results,lambda) {
   return(res)
 }
 
-start_cluster = function(mc.cores = my_detectCores(),type = 'mclapply',...) {
-  if(type == 'mclapply') {
-    cl = mc.cores
-  } else{
-    cl = makeCluster(mc.cores,type = type,...)
-  }
-  registerDoParallel(cl)
-  cl
-}
-
-GridLMMnet2 = function(setup,mc.cores,clusterType = 'mclapply',alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001), lambda=NULL,
-                       prediction_weights = NULL,foldid = NULL,verbose = FALSE,...)
-{
-  
-  y = setup$y
-  X_full = setup$X_full
-  V_setup = setup$V_setup
-  foldid = setup$foldid
-  penalty.factor = setup$penalty.factor
-  mean_y = setup$mean_y
-  sd_y = setup$sd_y
-  prediction_weights = setup$weights
-  
-  h2s_matrix   = V_setup$h2s_matrix
-  chol_V_list  = V_setup$chol_V_list
-  
-  nobs = length(y)
-  
-  # find lambda sequence
-  if(is.null(lambda)) {
-    cl = start_cluster(mc.cores,clusterType)
-    lambda = get_lambda_sequence(setup,alpha = alpha,nlambda = nlambda,lambda.min.ratio = lambda.min.ratio,verbose = verbose,...)
-    if(inherits(cl,"cluster")) stopCluster(cl)
-  }
-  
-  # run glmnet across the grid, including cross-validation
-  cl = start_cluster(mc.cores,clusterType)
-  results = run_GridLMMnet(setup,alpha = alpha,lambda = lambda,verbose = verbose,...)
-  if(inherits(cl,"cluster")) stopCluster(cl)
-  
-  # collect all results
-  res = collect_results_GridLMMnet(setup,results,lambda)
-  
-  return(res)
-}
