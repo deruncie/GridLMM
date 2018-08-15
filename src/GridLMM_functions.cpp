@@ -206,6 +206,91 @@ VectorXd log_det_of_XtX(
 
 
 
+// struct SS_result{
+//   MatrixXd beta_hats;
+//   VectorXd RSSs;
+//   double V_log_det;
+//   double V_star_inv_log_det;
+//   VectorXd V_star_L;
+// };
+// 
+// SS_result GridLMM_SS(
+//   MatrixXd &Y_std,
+//   MatrixXd &X_cov_std,
+//   MatrixXd &X_std,
+//   VectorXd &inv_prior_X,
+//   double V_log_det,
+//   MatrixXd L_A
+// ) {
+//   SS_result result;
+// 
+//   int b_x = X_std.cols();
+//   int n = Y_std.rows();
+//   int b = b_x + X_cov_std.cols();
+// 
+//   MatrixXd B = X_cov_std.transpose() * X_std;
+//   MatrixXd D = X_std.transpose() * X_std;
+//   D.diagonal() += inv_prior_X.tail(b_x);
+//   MatrixXd L = block_cholesky(L_A, B, D);
+// 
+//   result.V_star_L = vectorize_chol(L);
+//   result.V_star_inv_log_det = 2*L.diagonal().array().log().sum();
+// 
+//   MatrixXd b_hat = solve_cholesky(L,X_std.transpose() * Y_std);
+//   MatrixXd eta_std = Y_std - X_std * b_hat;
+// 
+//   result.beta_hats = b_hat;
+//   result.RSSs = Map<VectorXd>(b_hat.data(),b_hat.size());
+// 
+//   return(result);
+// }
+// 
+// // [[Rcpp::export()]]
+// Rcpp::List GridLMM_SS_dense_c(
+//     Map<MatrixXd> Y,
+//     Map<MatrixXd> inv_chol_Vi_transpose,
+//     Map<MatrixXd> X_cov,
+//     Map<MatrixXd> X,
+//     Map<MatrixXd> X_test,
+//     ArrayXi X_indices,
+//     VectorXd inv_prior_X,
+//     double V_log_det
+// ) {
+//   
+//   int b_x = X_test.cols();
+//   int p = X_indices.size();
+//   int n = Y.rows();
+//   
+//   MatrixXd Y_std = inv_chol_Vi_transpose.triangularView<Lower>() * Y;
+//   
+//   int b_cov = X_cov.cols();
+//   MatrixXd X_cov_std = inv_chol_Vi_transpose.triangularView<Lower>() * X_cov;
+//   MatrixXd A = X_cov_std.transpose() * X_cov_std;
+//   A.diagonal() += inv_prior_X.head(b_cov);
+//   Eigen::LLT<MatrixXd> llt_of_A(A);
+//   MatrixXd L_A = llt_of_A.matrixL();
+//   
+//   std::vector<SS_result> results;
+//   
+//   if(p == 0) {
+//     // If there are no tests to do, just run the null model
+//     MatrixXd Xi_std = MatrixXd::Zero(n,0);
+//     SS_result result_1 = GridLMM_SS(Y_std,X_cov_std,Xi_std,inv_prior_X,V_log_det,L_A);
+//     results.push_back(result_1);
+//   } else{
+//     for(int i = 0; i < p; i++) {
+//       // for each column of X, form the test matrix by multiplying the marker by the design matrix
+//       MatrixXd Xi = X.col(X_indices[i]-1).asDiagonal() * X_test;
+//       MatrixXd Xi_std = inv_chol_Vi_transpose.triangularView<Lower>() * Xi;
+//       // Then solve the model
+//       SS_result result_i = GridLMM_SS(Y_std,X_cov_std,Xi_std,inv_prior_X,V_log_det,L_A);
+//       results.push_back(result_i);
+//     }
+//   }
+//   
+//   // now, collect the results into the appropriate output structure.
+// }
+
 Rcpp::List GridLMM_SS(
     MatrixXd &Y_std,
     MatrixXd &X_cov_std,

@@ -101,6 +101,20 @@ GridLMM_GWAS_fast = function(formula,test_formula,reduced_formula,data,Y = NULL,
   mm_test = model.matrix(test_formula,droplevels(data))
   mm_reduced = model.matrix(reduced_formula,droplevels(data))
   
+  # -------- setup prior for X ------ #
+  if(method == 'BF') {
+    if(is.null(inv_prior_X)) {
+      warning('Calculating Bayes Factors with impropper prior on X might be unreliable')
+      inv_prior_X = rep(0,ncol(X_cov) + ncol(mm_test))
+    } else if(length(inv_prior_X) == 1) {
+      inv_prior_X = c(rep(0,ncol(X_cov)),rep(inv_prior_X,ncol(mm_test)))
+    } else if(length(inv_prior_X) != ncol(mm_test)) {
+      stop('Wrong length of inv_prior_X')
+    }
+  } else{
+    inv_prior_X = rep(0,ncol(X_cov) + ncol(mm_test))
+  }
+  
   # -------- get starting value by EMMAX ---------- #
   # evaluate likelihoods on a grid, going until all LL's stop increasing
   if(!is.null(Y) && is.null(h2_start)) {# && method != 'BF') {
@@ -260,11 +274,12 @@ run_GWAS_fast = function(X,setup,h2_step = 0.01,max_steps = 100,
       index_reduced = results_reduced$Trait == trait
       results$log_posterior_factor_reduced = results_reduced$log_posterior_factor[index_reduced]
       results$BF[index_full] = results$log_posterior_factor - results$log_posterior_factor_reduced # Note: need to account for different V_beta
+      results$Reduced_Df_X[index_full] = results_reduced$Df_X[index_reduced]
       if(!is.null(inv_prior_X)){
         if(length(inv_prior_X) == 1) {
           results$BF[index_full] = results$BF[index_full] - log(inv_prior_X)/2
         } else{
-          results$BF[index_full] = results$BF[index_full] - sum(log(tail(inv_prior_X,n = results$Df_X[index_full] - results$Reduced_Df_X[index_full])))/2
+          results$BF[index_full] = results$BF[index_full] - sum(log(tail(inv_prior_X,n = results$Df_X[1] - results$Reduced_Df_X[1])))/2
         }
       }
     }
@@ -378,7 +393,6 @@ fit_GWAS_fast = function(Y,X_cov,X_list,h2_start,h2_step,V_setup,inv_prior_X = N
     
     while(sum(active_tests) > 0 && nrow(h2s_to_test) > 0) {
       if(verbose) print(sprintf('step: %d, num_h2s: %d, num active: %d',n_steps,nrow(h2s_to_test), sum(active_tests)))
-      
       active_X_list = which(active_tests)
       
       # test each h2 in h2s_to_test

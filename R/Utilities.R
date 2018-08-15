@@ -52,7 +52,6 @@ make_RE_setup = function(formula,data,relmat = NULL,X = NULL,X_ID = NULL,proxima
     p = NULL
     p_test = NULL
     if(!is.null(X_ID) && term == X_ID){
-      p = ncol(X)
       if(term %in% names(relmat)){
         if(verbose) print('using provided RRM.')
         if(is.list(relmat[[term]])){
@@ -66,6 +65,7 @@ make_RE_setup = function(formula,data,relmat = NULL,X = NULL,X_ID = NULL,proxima
         }
       } else{
         if(verbose) print('making RRM matrix')
+        p = ncol(X)
         K = tcrossprod(X)/p
         relmat[[term]] = K
       }
@@ -649,7 +649,7 @@ compile_results = function(results_list){
     max_log_posterior_factors = apply(log_posterior_factors,1,max,na.rm=T)
     log_total_posterior_factors = max_log_posterior_factors + log(rowSums(exp(log_posterior_factors - max_log_posterior_factors),na.rm=T))
     results[[posterior_column]] = log_total_posterior_factors
-    
+    #
     # calculate the amount of posterior mass contributed by the new grid locations
     # need to add the prior here!
     posteriors = exp(log_posterior_factors - log_total_posterior_factors)
@@ -675,4 +675,53 @@ start_cluster = function(mc.cores = my_detectCores(),type = 'mclapply',...) {
 stop_cluster = function(cl){
   try(parallel::stopCluster(cl))
   foreach::registerDoSEQ()
+}
+
+#' Prepare a Kinship matrix for use with LDAK
+#'
+#' Takes an R matrix and saves it to disk in a format that LDAK can use
+#' 
+#' @details The matrix is first saved as a text file (without row/column names), and then 
+#'     LDAK is called by \code{system} with option "--convert-raw" to convert it into the format
+#'     used by LDAK. Temporary files are removed. The .grn.id file contains the rownames of \code{K} repeated in two columns.
+#' 
+#' @param K A matrix. Must have rownames.
+#' @param kinfile The base of the filename fo the kinship files to be created, including path.
+#' @param LDAK_program The path to the LDAK program
+#'
+#' @return A character with the base file name of the converted matrix.
+#' @export
+#'
+prep_LDAK_Kinship = function(K,kinfile,LDAK_program = 'LDAK/ldak5') {
+  # data.table::fwrite(data.frame(as.matrix(K)),file = 'temp.grm.raw',row.names=F,col.names=F,quote=F)
+  write.table(as.matrix(K),file = 'temp.grm.raw',row.names=F,col.names=F,quote=F)
+  write.table(cbind(rownames(K),rownames(K)),file = 'temp.grm.id',row.names=F,col.names=F,quote=F)
+  system(sprintf('%s --convert-raw %s --grm temp',LDAK_program,kinfile))
+  system(sprintf('rm temp.grm.*',kinfile))
+  return(kinfile)
+}
+
+combine_LDAK_Kinships = function(K_list, file = 'K.list') {
+  kinship_list = c('trait_A_converted','trait_D_converted','trait_E_converted','cage_K_converted','pop_K_converted')
+  write.table(K_list,file = file,row.names=F,col.names=F,quote=F)
+  return(file)
+}
+
+get_h2_LDAK = function(y,X_cov,K_list,LDAK_program,weights = rep(1,length(K_list))){
+  ID = data.table::fread(paste0(K_list[1],'.grm.id'),data.table = F,h=F)[,1:2]
+  write.table(cbind(ID,y),file = 'phen.txt',row.names=F,col.names=F,quote=F)
+  if(all(X_cov[,1] == 1)) X_cov = X_cov[,-1,drop=FALSE]
+  write.table(cbind(ID,X_cov),file = 'cov.txt',row.names=F,col.names=F,quote=F)
+  combine_LDAK_Kinships(K_list, file = 'K.list')
+  if(ncol(X_cov) > 0) {
+    system(sprintf('%s --reml h2_LDAK --pheno phen.txt --covar cov.txt --mgrm K.list --kinship-details NO',LDAK_program))
+  } else{
+    system(sprintf('%s --reml h2_LDAK --pheno phen.txt --mgrm K.list --kinship-details NO',LDAK_program))
+  }
+  ldak_results = fread('h2_LDAK.vars',data.table = F)
+  ldak_results$Variance[-nrow(ldak_results)] = ldak_results$Variance[-nrow(ldak_results)]/weights
+  h2_LDAK = matrix(ldak_results$Variance[-nrow(ldak_results)]/sum(ldak_results$Variance),nr=1)
+  colnames(h2_LDAK) = names(K_list)
+  rownames(h2_LDAK) = NULL
+  h2_LDAK
 }

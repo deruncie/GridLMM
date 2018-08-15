@@ -117,7 +117,6 @@ gLASSO_setup$h2s_matrix = setup_Grid(names(gLASSO_setup$V_setup$RE_setup),h2_div
 cl = start_cluster(8,'FORK')
 gLASSO_setup$V_setup = calculate_Grid(gLASSO_setup$V_setup,gLASSO_setup$h2s_matrix)
 stop_cluster(cl)
-registerDoSEQ()
 
 lambda = get_lambda_sequence(gLASSO_setup,alpha = 1)
 cl = start_cluster(8,'FORK')
