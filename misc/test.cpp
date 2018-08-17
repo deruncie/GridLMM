@@ -44,3 +44,62 @@ MatrixXd invt2(SEXP Rinv_,Map<MatrixXd> Y, bool sparseR = false){
   }
   return(result);
 }
+
+
+// [[Rcpp::export()]]
+MatrixXd m1(Map<MatrixXd> X, Map<MatrixXd> Y) {
+  MatrixXd result(X.rows(),Y.cols());
+  result = X*Y;
+  return(result);
+}
+// [[Rcpp::export()]]
+MatrixXd m1b(Map<MatrixXd> X, Map<MatrixXd> Y) {
+  MatrixXd result(X.rows(),Y.cols());
+  for(int i = 0; i < Y.cols(); i++){
+    result.col(i) = X*Y.col(i);
+  }
+  return(result);
+}
+// [[Rcpp::export()]]
+MatrixXd m1c(Map<MatrixXd> Xt, Map<MatrixXd> Y) {
+  MatrixXd result(Xt.cols(),Y.cols());
+  for(int i = 0; i < Y.cols(); i++){
+    result.col(i) = Xt.transpose()*Y.col(i);
+  }
+  return(result);
+}
+
+// [[Rcpp::export()]]
+MatrixXd m2(Map<MatrixXd> X, Map<MatrixXd> Y) {
+  int n = X.cols();
+  int b = Y.rows()/n;
+  int p = Y.cols();
+  MatrixXd result(Y.rows(),Y.cols());
+  for(int i = 0; i < b; i++) {
+    result.block(n*i,0,n,p) = X * Y.block(n*i,0,n,p);
+  }
+  return(result);
+}
+
+// [[Rcpp::export()]]
+MatrixXd m3(Map<MatrixXd> X, Map<MatrixXd> Y) {
+  int n = X.cols();
+  int b = Y.rows()/n;
+  int p = Y.cols();
+  MatrixXd result(Y.rows(),Y.cols());
+  for(int i = 0; i < p; i++) {
+    MatrixXd Yi = Map<MatrixXd>(Y.col(i).data(),n,b);
+    MatrixXd r = X * Yi;
+    // result.col(i) = Map<VectorXd>(r.data(),n*b);
+  }
+  return(result);
+}
+
+// [[Rcpp::export()]]
+MatrixXd m4(MatrixXd &X, MatrixXd &Y) {
+  return(X*Y);
+}
+// [[Rcpp::export()]]
+MatrixXd m4b(MatrixXd X, MatrixXd Y) {
+  return(X*Y);
+}

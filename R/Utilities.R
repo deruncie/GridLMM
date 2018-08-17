@@ -473,6 +473,19 @@ calc_LL = function(Y,X_cov,X_list,h2s,chol_Vi,V_log_det,inv_prior_X,downdate_Xs 
     } else{
       inv_chol_Vi_transpose = t(backsolve(chol_Vi,diag(1,ncol(chol_Vi))))
       SSs <- GridLMM_SS_dense_c(Y,inv_chol_Vi_transpose,X_cov, X_list,active_X_list,inv_prior_X,V_log_det)
+      X1 = X_list[[1]]
+      X_test = matrix(1,n,1)
+      chol_ViT = t(chol_Vi)
+      chol_Vis = as(chol_Vi,'CsparseMatrix')
+      SSs2 <- GridLMM_SS_dense_c4(Y,chol_Vi,X_cov, X1,active_X_list,1,inv_prior_X,V_log_det)
+      sapply(names(SSs),function(x) max(abs(SSs[[x]]-SSs2[[x]])))
+      library(microbenchmark)
+      microbenchmark(
+        # SSs <- GridLMM_SS_dense_c(Y,inv_chol_Vi_transpose,X_cov, X_list,active_X_list,inv_prior_X,V_log_det),
+        SSs3 <- GridLMM_SS_dense_c3(Y,inv_chol_Vi_transpose,X_cov, X_list,active_X_list,inv_prior_X,V_log_det),
+        SSs2 <- GridLMM_SS_dense_c2(Y,chol_Vi,X_cov, X1,active_X_list,1,inv_prior_X,V_log_det),
+        SSs4 <- GridLMM_SS_dense_c4(Y,chol_Vi,X_cov, X1,active_X_list,1,inv_prior_X,V_log_det)
+      )
     }
   } else{
     if(inherits(chol_Vi,'Matrix')) {

@@ -52,7 +52,9 @@ data$y = y
 
 g0 = GridLMM_ML(y~cov+(1|Group)+(0+cov|Group),data,relmat = list(Group = tcrossprod(scale_SNPs(Xg[,1:50],scaleX = F))/50))
 g0$results
-g1 = GridLMM_GWAS(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_divisions = 10, save_V_list = 'V_folder',mc.cores=1)
+g1 = GridLMM_GWAS(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',
+                  EMMAX_start = F,h2_start = c(0.9,0.1),
+                  h2_divisions = 10, save_V_list = 'V_folder',mc.cores=1)
 proximal_matrix = diag(1,50)
 diag(proximal_matrix[-1,]) = 1
 diag(proximal_matrix[-c(1:2),]) = 1
