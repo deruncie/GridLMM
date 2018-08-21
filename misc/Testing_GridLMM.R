@@ -53,27 +53,43 @@ data$y = y
 g0 = GridLMM_ML(y~cov+(1|Group)+(0+cov|Group),data,relmat = list(Group = tcrossprod(scale_SNPs(Xg[,1:50],scaleX = F))/50))
 g0$results
 g1 = GridLMM_GWAS(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',
-                  EMMAX_start = F,h2_start = c(0.9,0.1),
+                  # EMMAX_start = F,h2_start = c(0.9,0.1),
                   h2_divisions = 10, save_V_list = 'V_folder',mc.cores=1)
 proximal_matrix = diag(1,50)
 diag(proximal_matrix[-1,]) = 1
 diag(proximal_matrix[-c(1:2),]) = 1
 diag(proximal_matrix[-c(1:3),]) = 1
 proximal_matrix[1:4,1:4]=1
-g2 = GridLMM_GWAS(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_divisions = 10,mc.cores=1,proximal_matrix = proximal_matrix)
-g3 = GridLMM_GWAS(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',proximal_matrix = proximal_matrix,h2_divisions = 10)
-g3b = GridLMM_GWAS(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_divisions = 10,
+g2 = GridLMM_GWAS(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_divisions = 10,mc.cores=1,proximal_matrix = proximal_matrix)
+g3 = GridLMM_GWAS(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',proximal_matrix = proximal_matrix,h2_divisions = 10)
+g3b = GridLMM_GWAS(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_divisions = 10,
                    RE_setup = g3$setup$RE_setup, V_list = g3$setup$V_list, downdate_Xs = g3$setup$downdate_Xs)
 head(g1$results)
 head(g2$results)
 head(g3$results)
 head(g3b$results)
 
-g4 = GridLMM_GWAS_fast(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',max_step = 100,h2_step = 0.01,mc.cores=1)
-g4b = GridLMM_GWAS_fast(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',max_step = 100,h2_step = 0.01,mc.cores=1,proximal_matrix = proximal_matrix)
+g4 = GridLMM_GWAS_fast(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',max_step = 100,h2_step = 0.01,mc.cores=1)
+g4b = GridLMM_GWAS_fast(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',max_step = 100,h2_step = 0.01,mc.cores=1,proximal_matrix = proximal_matrix,centerX=T)
 head(g4$results)
 head(g4b$results)
 
+gg4 = GridLMM_GWAS2(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',max_step = 100,h2_step = 0.01,mc.cores=1,method='ML')
+plot(g4$results$p_value_ML,gg4$results$p_value_ML,log='xy')
+gg4b = GridLMM_GWAS2(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',centerX = T,
+                     max_step = 100,h2_step = 0.01,mc.cores=1,method='ML',
+                     proximal_markers = lapply(1:nrow(proximal_matrix),function(x) which(proximal_matrix[x,]==1))
+                     ,proximal_Xs = list(scale_SNPs(Xg,centerX = T,scaleX = F))
+                     )
+plot(g4b$results$p_value_ML,gg4b$results$p_value_ML,log='xy')
+gg4c = GridLMM_GWAS2(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',algorithm = 'Full',
+                     max_step = 100,h2_step = 0.01,mc.cores=1,method='REML',
+                     proximal_markers = lapply(1:nrow(proximal_matrix),function(x) which(proximal_matrix[x,]==1)))
+plot(g4b$results$p_value_ML,gg4c$results$p_value_REML,log='xy')
+gg4d = GridLMM_GWAS2(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',
+                     max_step = 100,h2_step = 0.01,mc.cores=1,method='BF',inv_prior_X = 1,
+                     proximal_markers = lapply(1:nrow(proximal_matrix),function(x) which(proximal_matrix[x,]==1)))
+plot(g4b$results$p_value_ML,-gg4d$results$BF,log='x')
 
 # Run GxEMMAnet
 library(glmnet)

@@ -46,7 +46,38 @@ VectorXd vectorize_chol2(MatrixXd L) {
 MatrixXd solve_cholesky2(MatrixXd L, MatrixXd X) {
   // solve(LLt,X)
   // L is lower-triangular
+  if(L.cols() != X.rows()) stop("dimensions of L and X are not compatible");
   return(L.transpose().triangularView<Upper>().solve(L.triangularView<Lower>().solve(X)));
+}
+
+
+void chol_update_R_inplace(MatrixXd &R, MatrixXd X, VectorXd weights) {
+  int n = R.rows();
+  if(X.rows() != n) stop("Wrong dimension of X for downdating R");
+  if(weights.size() != X.cols()) stop("wrong length of weights for downdating R");
+  for(int i = 0; i < X.cols(); i++){
+    VectorXd Xi = X.col(i);
+    for(int k = 0; k < n; k++){
+      double R_kk = R.coeffRef(k,k);
+      double x_k = Xi[k];
+      double r = sqrt(R_kk*R_kk + weights[i] * x_k*x_k);
+      double c = r / R_kk;
+      double s = x_k / R_kk;
+      R.coeffRef(k,k) = r;
+      if(k < (n-1)) {
+        R.block(k,k+1,1,n-k-1) = (R.block(k,k+1,1,n-k-1) + weights[i] * s * Xi.tail(n-k-1).transpose())/c;
+        Xi.tail(n-k-1) = c*Xi.tail(n-k-1) - s*R.block(k,k+1,1,n-k-1).transpose();
+      }
+    }
+  }
+}
+
+
+// [[Rcpp::export()]]
+MatrixXd chol_update_L(MatrixXd L, MatrixXd X, VectorXd weights) {
+  MatrixXd R = L.transpose();
+  chol_update_R_inplace(R,X,weights);
+  return(R.transpose());
 }
 
 
@@ -111,42 +142,63 @@ Rcpp::List collect_SS_results(
 
 
 // [[Rcpp::export()]]
-Rcpp::List GridLMM_SS_dense_c2(
+Rcpp::List GridLMM_SS_matrix(
     Map<MatrixXd> Y,    
     SEXP chol_Vi_R_, 
     Map<MatrixXd> X_cov,
-    Map<MatrixXd> X,
+    Rcpp::List X_list_,
     ArrayXi X_indices,
-    int b_x,
-    VectorXd inv_prior_X,
-    double V_log_det
+    VectorXd inv_prior_X
 ) {
   
   bool denseR = Rf_isMatrix(chol_Vi_R_);
   
+  int n = Y.rows();
   int b_cov = X_cov.cols();
+  int b_x = X_list_.size();
   int b = b_cov + b_x;
   int p = X_indices.size();
-  int n = Y.rows();
+  
+  if(X_cov.rows() != n) stop("Wrong dimenions of X_cov");
+  if(inv_prior_X.size() < b) stop("Wrong length of inv_prior_X");
+  
   std::vector<SS_result> results;
 
+  // Process X_list
+  std::vector<Map<MatrixXd> > X_list;
+  for(int j = 0; j < b_x; j++) {
+    X_list.push_back(as<Map<MatrixXd> >(X_list_[j]));
+    if(X_list[j].cols() != X_list[0].cols()) stop("Different numbers of columns in X_list matrices");
+    if(X_list[j].rows() != n) stop("Wrong number of rows in X_list matrices");
+  }
+
+  if(b_x > 0) {
+    if(X_indices.maxCoeff() > X_list[0].cols()) stop("X_indices reference missing columns of X_list");
+    if(X_indices.minCoeff() < 1) stop("X_indices must be >= 1");
+  }
+
   MatrixXd Y_std, X_cov_std, X_std;
+  double V_log_det = 0;
   if(denseR) {
     Map<MatrixXd> chol_Vi_R = as<Map<MatrixXd> >(chol_Vi_R_);
+    if(chol_Vi_R.cols() != n || chol_Vi_R.rows() != n) stop("Wrong dimenions of chol_Vi_R");
+    V_log_det = 2*chol_Vi_R.diagonal().array().log().sum();
     Y_std = chol_Vi_R.transpose().triangularView<Lower>().solve(Y);
     X_cov_std = chol_Vi_R.transpose().triangularView<Lower>().solve(X_cov);
   } else{
     MSpMat chol_Vi_R = as<MSpMat>(chol_Vi_R_);
+    if(chol_Vi_R.cols() != n || chol_Vi_R.rows() != n) stop("Wrong dimenions of chol_Vi_R");
+    for(int i = 0; i < n; i++) V_log_det += 2*log(chol_Vi_R.coeff(i,i));
     Y_std = chol_Vi_R.transpose().triangularView<Lower>().solve(Y);
     X_cov_std = chol_Vi_R.transpose().triangularView<Lower>().solve(X_cov);
   }
-  
+
   MatrixXd A = X_cov_std.transpose() * X_cov_std;
   A.diagonal() += inv_prior_X.head(b_cov);
   Eigen::LLT<MatrixXd> llt_of_A(A);
   MatrixXd L_A = llt_of_A.matrixL();
 
-  if(p == 0) {
+  if(b_x == 0) {
     // If there are no tests to do, just run the null model
     MatrixXd Xf_std = X_cov_std;
     SS_result result_1 = GridLMM_SS(Y_std,Xf_std,L_A,V_log_det);
@@ -155,9 +207,11 @@ Rcpp::List GridLMM_SS_dense_c2(
     // process X for active_X_columns
     MatrixXd X_std(n,p*b_x);
     for(int i = 0; i < p; i++) {
-      // reform each active column of X into a n x b_x design matrix
+      // reform X_list into a wide matrix of n x b_x design matrices
       int index_i = X_indices[i]-1;
-      X_std.block(0,index_i*b_x,n,b_x) = Map<MatrixXd>(X.col(index_i).data(),n,b_x);
+      for(int j = 0; j < b_x; j++) {
+        X_std.col(i*b_x + j) = X_list[j].col(index_i);
+      }
     }
     // rotate these design matrixes by chol_Vi_R
     if(denseR) {
@@ -170,8 +224,7 @@ Rcpp::List GridLMM_SS_dense_c2(
 
     // run tests
     for(int i = 0; i < p; i++) {
-      int index_i = X_indices[i]-1;
-      MatrixXd Xi_std = X_std.block(0,index_i*b_x,n,b_x);
+      MatrixXd Xi_std = X_std.block(0,i*b_x,n,b_x);
 
       MatrixXd Xf_std(n,b);
       Xf_std << X_cov_std,Xi_std;
@@ -188,55 +241,157 @@ Rcpp::List GridLMM_SS_dense_c2(
       results.push_back(result_i);
     }
   }
-  
+
   return(collect_SS_results(results));
 }
 
+// [[Rcpp::export()]]
+Rcpp::List build_downdate_Xs(
+  IntegerVector RE_index, 
+  Rcpp::List X_list_,
+  Rcpp::List proximal_markers
+) {
+  // Each row of proximal matrix is a vector of 0/1 listing which markers are proximal for a test.
+  // X_list is a list of matrices (#=b_x). Each test pulls 1 column from each matrix
+  // For each test, we make a make a (n x b_x*l) matrix of of the proximal vectors for the b_x sets of l vectors.
+  // The l vectors are only those that differ from the previous test
+  // downdate_signs is a list of vectors of +1/-1 for if the corresponding column of the downdate_Xs matrix is to be added or subtracted
+                  
+  // Note: coming from R, all indexes are 1-based                      
+  
+  int p = proximal_markers.length();
+  
+  Rcpp::List downdate_Xs(p);
+   
+  // Process X_list
+  RE_index = RE_index - 1;  // change to 0-based
+  int n_RE = RE_index.length();
+  if(max(RE_index) > X_list_.length()) stop("RE_index refers to non-existant X-matrix");
+  std::vector<Map<MatrixXd> > X_list;
+  for(int j = 0; j < n_RE; j++) {
+    if(RE_index(j) == -1) {
+      MatrixXd null = MatrixXd::Zero(0,0);
+      X_list.push_back(Map<MatrixXd>(null.data(),0,0));
+    } else{
+      X_list.push_back(as<Map<MatrixXd> >(X_list_[RE_index(j)]));
+    }
+  }
+  int n = X_list[0].rows();
+  
+  IntegerVector proximal_markers_0(0);
+  for(int i = 0; i < p; i++){
+    // find which markers differ from previous test
+    // -1:drop for this test, +1: recover from previous test
+    IntegerVector proximal_markers_i = as<IntegerVector>(proximal_markers[i]);
+    if(max(proximal_markers_i) > X_list[0].cols()) stop("some proximal markers not present in X_list");
+    
+    IntegerVector add_markers = setdiff(proximal_markers_i,proximal_markers_0);
+    IntegerVector drop_markers = setdiff(proximal_markers_0,proximal_markers_i);
+    
+    VectorXd downdate_signs_i(add_markers.length() + drop_markers.length());
+    downdate_signs_i << VectorXd::Constant(add_markers.length(),-1), VectorXd::Constant(drop_markers.length(),1);
+    
+    Rcpp::List dXi(n_RE);  // List of downdate matrices for test i (one for each element of X_list)
+    Rcpp::List dsi(n_RE);
+    for(int j = 0; j < n_RE; j++) {
+      if(X_list[j].cols() > 0) {
+        MatrixXd dXij(n,add_markers.length() + drop_markers.length());
+        for(int k = 0; k < add_markers.length(); k++) {
+          dXij.col(k) = X_list[j].col(add_markers(k)-1);
+        }
+        for(int k = 0; k < drop_markers.length(); k++) {
+          dXij.col(add_markers.length() + k) = X_list[j].col(drop_markers(k)-1);
+        }
+        dXi[j] = dXij;
+      } else{
+        dXi[j] = MatrixXd::Zero(n,0);
+      }
+    }
+    downdate_Xs[i] = Rcpp::List::create(Named("downdate_Xi") = dXi,
+                                        Named("signs_i") = downdate_signs_i);
+    
+    
+    proximal_markers_0 = proximal_markers_i;
+  }
+  return(downdate_Xs);
+}
 
 // [[Rcpp::export()]]
-Rcpp::List GridLMM_SS_dense_c4(
+Rcpp::List GridLMM_SS_downdate_matrix(
     Map<MatrixXd> Y,    
-    Map<MatrixXd> chol_Vi_R, 
+    MatrixXd chol_Vi_R, //don't want this modified
     Map<MatrixXd> X_cov,
-    Map<MatrixXd> X,
+    Rcpp::List X_list_,
     ArrayXi X_indices,
-    int b_x,
-    VectorXd inv_prior_X,
-    double V_log_det
+    Rcpp::List downdate_Xs,
+    VectorXd downdate_weights, // weights and Xs are considered consecutive. chol_Vi_R will be updated from previous test
+    VectorXd inv_prior_X
 ) {
   
-  int b_cov = X_cov.cols();
-  int b = b_cov + b_x;
-  int p = X_indices.size();
   int n = Y.rows();
+  int m = Y.cols();
+  int b_cov = X_cov.cols();
+  int b_x = X_list_.length();
+  int b = b_cov + b_x;
+  int p = downdate_Xs.size();
+  
+  if(X_cov.rows() != n) stop("Wrong dimenions of X_cov");
+  if(inv_prior_X.size() < b) stop("Wrong length of inv_prior_X");
+  if(chol_Vi_R.cols() != n || chol_Vi_R.rows() != n) stop("Wrong dimenions of chol_Vi_R");
+  if(X_indices.size() != downdate_Xs.length()) stop("Wrong length of X_indices");
+  
   std::vector<SS_result> results;
   
+  // Process X_list
+  std::vector<Map<MatrixXd> > X_list;
+  for(int j = 0; j < b_x; j++) {
+    X_list.push_back(as<Map<MatrixXd> >(X_list_[j]));
+    if(X_list[j].cols() != X_list[0].cols()) stop("Different numbers of columns in X_list matrices");
+    if(X_list[j].rows() != n) stop("Wrong number of rows in X_list matrices");
+  }
+  
+  MatrixXd YXf(n,m+b);
+  YXf.leftCols(m) = Y;
+  YXf.block(0,m,n,b_cov) = X_cov;
   for(int i = 0; i < p; i++) {
-    
+
     // update chol_Vi_R and V_log_det
-    
-    // re-form column of X into a n x b_x design matrix
-    MatrixXd Xf(n,b);
-    if(X.cols() == 0) {
-      Xf = X_cov;
-    } else{
-      int index_i = X_indices[i]-1;
-      MatrixXd Xi = Map<MatrixXd>(X.col(index_i).data(),n,b_x);
-      Xf << X_cov,Xi;
+
+    Rcpp::List downdate_i = as<Rcpp::List>(downdate_Xs[i]);  // List with downdate Info
+    Rcpp::List downdate_Xis = as<Rcpp::List>(downdate_i["downdate_Xi"]); // List of downdate Matrices (ie for different random effects)
+    VectorXd downdate_signs = as<VectorXd>(downdate_i["signs_i"]); // each downdate matrix has same number of columns, and the corrresponding columns are added or removed in each matrix
+    int n_downdate = downdate_Xis.length();
+    if(n_downdate != downdate_weights.size()) stop("Wrong length of downdate_weights");
+    for(int j = 0; j < n_downdate; j++) {
+      MatrixXd dXi = as<MatrixXd>(downdate_Xis[j]);
+      if(dXi.cols() > 0) {
+        if(dXi.rows() != n) stop("Wrong number of rows in downdate_Xs");
+        chol_update_R_inplace(chol_Vi_R,dXi,downdate_signs * downdate_weights(j));
+      }
     }
-    
-    // rotate Y and Xf
-    MatrixXd Y_std = chol_Vi_R.transpose().triangularView<Lower>().solve(Y);
-    MatrixXd Xf_std = chol_Vi_R.transpose().triangularView<Lower>().solve(Xf);
-    // MatrixXd Y_std = chol_Vi_R.transpose().triangularView<Lower>() * (Y);
-    // MatrixXd Xf_std = chol_Vi_R.transpose().triangularView<Lower>() * (Xf);
-    
+    double V_log_det = 2*chol_Vi_R.diagonal().array().log().sum();
+
+    // re-form column of X into a n x b_x design matrix
+    if(b_x > 0) {
+      MatrixXd Xi(n,b_x);
+      int index_i = X_indices[i]-1;
+      for(int j = 0; j < b_x; j++) {
+        Xi.col(j) = X_list[j].col(index_i);
+      }
+      YXf.rightCols(b_x) = Xi;
+    }
+
+    // rotate YXf matrix, extract Y_std and Xf_std;
+    MatrixXd YXf_std = chol_Vi_R.transpose().triangularView<Lower>().solve(YXf);
+    MatrixXd Y_std = YXf_std.leftCols(m);
+    MatrixXd Xf_std = YXf_std.rightCols(b);
+
     // calculate L
     MatrixXd XtX = Xf_std.transpose() * Xf_std;
     XtX.diagonal() += inv_prior_X;
     Eigen::LLT<MatrixXd> llt_of_XtX(XtX);
     MatrixXd L = llt_of_XtX.matrixL();
-    
+
     // Then solve the model
     SS_result result_i = GridLMM_SS(Y_std,Xf_std,L,V_log_det);
 
