@@ -9,6 +9,10 @@ premultiply_list_of_matrices <- function(Qt, X_list) {
     .Call('_GridLMM_premultiply_list_of_matrices', PACKAGE = 'GridLMM', Qt, X_list)
 }
 
+chol_update_L <- function(L, X, weights) {
+    .Call('_GridLMM_chol_update_L', PACKAGE = 'GridLMM', L, X, weights)
+}
+
 chol_update <- function(L, X, sign) {
     .Call('_GridLMM_chol_update', PACKAGE = 'GridLMM', L, X, sign)
 }
@@ -29,15 +33,15 @@ log_det_of_XtX <- function(X_cov, X_tests, X_indices) {
     .Call('_GridLMM_log_det_of_XtX', PACKAGE = 'GridLMM', X_cov, X_tests, X_indices)
 }
 
-GridLMM_SS_dense_c <- function(Y, inv_chol_Vi_transpose, X_cov, X_tests, X_indices, inv_prior_X, V_log_det) {
-    .Call('_GridLMM_GridLMM_SS_dense_c', PACKAGE = 'GridLMM', Y, inv_chol_Vi_transpose, X_cov, X_tests, X_indices, inv_prior_X, V_log_det)
+GridLMM_SS_matrix <- function(Y, chol_Vi_R_, X_cov, X_list_, X_indices, inv_prior_X) {
+    .Call('_GridLMM_GridLMM_SS_matrix', PACKAGE = 'GridLMM', Y, chol_Vi_R_, X_cov, X_list_, X_indices, inv_prior_X)
 }
 
-GridLMM_SS_sparse_c <- function(Y, inv_chol_Vi_transpose, X_cov, X_tests, X_indices, inv_prior_X, V_log_det) {
-    .Call('_GridLMM_GridLMM_SS_sparse_c', PACKAGE = 'GridLMM', Y, inv_chol_Vi_transpose, X_cov, X_tests, X_indices, inv_prior_X, V_log_det)
+build_downdate_Xs <- function(RE_index, X_list_, proximal_markers) {
+    .Call('_GridLMM_build_downdate_Xs', PACKAGE = 'GridLMM', RE_index, X_list_, proximal_markers)
 }
 
-GridLMM_SS_downdate <- function(Y, V_inv, X_cov, X_tests, inv_prior_X, downdate_weights, downdate_Xs, X_indices, V_log_det) {
-    .Call('_GridLMM_GridLMM_SS_downdate', PACKAGE = 'GridLMM', Y, V_inv, X_cov, X_tests, inv_prior_X, downdate_weights, downdate_Xs, X_indices, V_log_det)
+GridLMM_SS_downdate_matrix <- function(Y, chol_Vi_R, X_cov, X_list_, X_indices, downdate_Xs, downdate_weights, inv_prior_X) {
+    .Call('_GridLMM_GridLMM_SS_downdate_matrix', PACKAGE = 'GridLMM', Y, chol_Vi_R, X_cov, X_list_, X_indices, downdate_Xs, downdate_weights, inv_prior_X)
 }
 

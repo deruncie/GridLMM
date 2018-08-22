@@ -2,24 +2,24 @@
 % Please edit documentation in R/GridLMM_GWAS.R
 \name{GridLMM_GWAS}
 \alias{GridLMM_GWAS}
-\title{GridLMM GWAS with full grid search}
+\title{GridLMM GWAS}
 \usage{
-GridLMM_GWAS(formula, test_formula, reduced_formula, data, Y = NULL,
-  weights = NULL, X, X_ID = "ID", centerX = TRUE, scaleX = FALSE,
-  fillNAX = FALSE, X_map = NULL, relmat = NULL, inv_prior_X = NULL,
-  h2_divisions, EMMAX_start = TRUE, h2_start = NULL, REML = TRUE,
-  ML = TRUE, BF = FALSE, proximal_matrix = NULL, RE_setup = NULL,
-  V_list_setup = NULL, save_V_list = NULL, downdate_Xs = NULL,
-  diagonalize = T, svd_K = T, drop0_tol = 1e-10,
-  mc.cores = my_detectCores(), clusterType = "mclapply",
-  chunkSize = 10000, verbose = T)
+GridLMM_GWAS(formula, test_formula, reduced_formula, data, weights = NULL, X,
+  X_ID = "ID", centerX = FALSE, scaleX = FALSE, fillNAX = FALSE,
+  X_map = NULL, relmat = NULL, h2_step = 0.01, h2_start = NULL,
+  h2_start_tolerance = 0.001, max_steps = 100, method = c("REML", "ML",
+  "BF"), algorithm = c("Fast", "Full"), inv_prior_X = NULL,
+  target_prob = 0.99, proximal_markers = NULL, proximal_Xs = NULL,
+  V_setup = NULL, save_V_folder = NULL, diagonalize = T,
+  mc.cores = my_detectCores(), verbose = T)
 }
 \arguments{
 \item{formula}{A two-sided linear formula as used in \code{\link[lme4]{lmer}} describing the fixed-effects
 and random-effects of the model on the RHS and the response on the LHS. Note: correlated random-effects
-are not implemented, so using one or two vertical bars (\code{|}) or one is identical. At least one random effect is needed.}
+are not implemented, so using one or two vertical bars (\code{|}) or one is identical. At least one random effect is needed.
+Unlike \code{lmer}, random effects can have as many as there are observations.}
 
-\item{test_formula}{One-sided formula for the alternative model (ML or BF), or full model (REML) to be applied to each test (ie \emph{marker}, or column of \code{X}). 
+\item{test_formula}{test_formula One-sided formula for the alternative model (ML or BF), or full model (REML) to be applied to each test (ie \emph{marker}, or column of \code{X}). 
 Each term on the RHS will be multiplied by a column of X to form a new covariate. 
 Ex. \code{~1} specifices an intercept for each marker.
 \code{~1+cov} species an intercept and slope on \code{cov} for each marker.}
@@ -28,77 +28,104 @@ Ex. \code{~1} specifices an intercept for each marker.
 
 \item{data}{A data frame containing the variables named in \code{formula}.}
 
-\item{Y}{Optional matrix of responses. Currently only one response is evaluated.}
-
 \item{weights}{An optional vector of observation-specific weights.}
 
-\item{X}{Matrix of markers with \eqn{p} columns. Each column of X is used as a separate association test. Should have row names that correspond to the \code{X_ID} column of \code{data}.}
+\item{X}{Matrix of markers with \eqn{p} columns. 
+Each column of X is used as a separate association test. 
+Should have row names that correspond to the \code{X_ID} column of \code{data}.
+Colnames are used as IDs for each test, and should align with names of \code{proximal_markers} if provided.}
 
 \item{X_ID}{Column of \code{data} that identifies the row of \code{X} that corresponding to each observation. 
 It is possible that multiple observations reference the same row of \code{X}.}
 
-\item{centerX}{TRUE/FALSE for each. Applied to the \code{X} matrix before using \code{X} to form any GRMs.}
-
-\item{scaleX}{TRUE/FALSE for each. Applied to the \code{X} matrix before using \code{X} to form any GRMs.}
-
-\item{fillNAX}{TRUE/FALSE for each. Applied to the \code{X} matrix before using \code{X} to form any GRMs.}
+\item{centerX, scaleX, fillNAX}{TRUE/FALSE for each. Applied to the \code{X} matrix before using \code{X} to form any GRMs.}
 
 \item{X_map}{Optional. Data frame with information on each marker such as chromosome, position, etc. Will be appended to the results}
 
-\item{relmat}{A list of matrices that are proportional to the (within) covariance structures of the group level effects. 
-The names of the matrices should correspond to the columns in \code{data} that are used as grouping factors. All levels
+\item{relmat}{Either:
+1) A list of matrices that are proportional to the (within) covariance structures of the group level effects. 
+2) A list of lists with elements (\code{K}, \code{p}) with a covariance matrix and an integer listing the number of markers 
+    used to estimate the covariance matrix. This is used for appropriate downdating of \code{V} to remove proximal markers for each test.
+The names of the matrices / list elements should correspond to the columns in \code{data} that are used as grouping factors. All levels
 of the grouping factor should appear as rownames of the corresponding matrix.}
+
+\item{h2_step}{Step size of the grid}
+
+\item{h2_start}{Optional. Matrix with each row a vector of \eqn{h^2} parameters defining starting values for the grid. 
+Typically ML/REML solutions for the null model. 
+If null, will be calculated using \link{GridLMM_ML}.}
+
+\item{h2_start_tolerance}{Optional. Grid size for \link{GridLMM_ML} in finding ML/REML solutions for the mull model.}
+
+\item{max_steps}{Maximum iterations of the heuristic algorithm per marker.}
+
+\item{method}{One of 'REML', 'ML', or 'BF'. 
+'REML' wimplies a Wald-test. 'ML' implies Maximum Likelihood evaluation, with the LRT.
+'BF' does posterior evaluation and calculates Bayes Factors.}
+
+\item{algorithm}{Either 'Fast' or 'Full'. See details.}
 
 \item{inv_prior_X}{Vector of values for the prior precision of each of the fixed effects (including an intercept). Will be recycled if necessary.}
 
-\item{h2_divisions}{Number of divisions of each variance component on grid}
+\item{target_prob}{see \strong{Details}}
 
-\item{EMMAX_start}{Should the null model be used to find a starting point for the grid?}
+\item{proximal_markers}{A list of integer vectors with length equal to the number of columns of \code{X}/
+Each element is a vector of indices of markers that should be removed from any GRMs before the current test is calculated.
+If \code{proximal_Xs} is provided, then the indices correspond to columns of \code{proximal_Xs}. 
+Otherwise, the indices correspond to columns of \code{X}.
+If null, no downdating will be performed.}
 
-\item{h2_start}{Optional. Matrix with each row a vector of \eqn{h^2} parameters defining starting values for the grid. Typically ML/REML solutions for the null model. 
-If null, will be calculated using \link{GridLMM_ML}.}
+\item{proximal_Xs}{Optional. A list of matrices to be used for downdating GRMs. If multiple GRMs are calculated from markers,
+this list can have multiple elements. Each matrix should have rownames like \code{X} corresponding to the levels of \code{X_ID} in \code{data}.}
 
-\item{REML}{TRUE/FALSE. Should REML method be used? Will calculate Wald tests.}
+\item{V_setup}{Optional. A list produced by a GridLMM function containing the pre-processed V decompositions for each grid vertex, 
+or the information necessary to create this. Generally saved from a previous run of GridLMM on the same data.}
 
-\item{ML}{TRUE/FALSE. Should ML method be used? Will calculate LRT tests.}
-
-\item{BF}{TRUE/FALSE. Should BF method be used? Will calculate Bayes Factors}
-
-\item{proximal_matrix}{A matrix of size \eqn{p \times p} used to determine which markers should be dropped from the GRM when testing each marker. 
-Each row is a vector of 0's or 1's, with element \code{(i,j)==1} if marker j should be dropped when testing marker i.}
-
-\item{RE_setup}{Object containing variables for setting up error model with random effects. Can be re-passed to the function to re-run the same model.}
-
-\item{V_list_setup}{Object containing variables for setting up error model with random effects. Can be re-passed to the function to re-run the same model.}
-
-\item{downdate_Xs}{A list providing information for updating GRMs based on proximal markers. 
-Created based on \code{proximal_matrix} by this function, and can be re-passed to the function in future runs.}
+\item{save_V_folder}{Optional. A character vector giving a folder to save pre-processed V decomposition files for future / repeated use. 
+If null, V decompositions are stored in memory}
 
 \item{diagonalize}{If TRUE and the model includes only a single random effect, the "GEMMA" trick will be used to diagonalize V. This is done
 by calculating the SVD of K, which can be slow for large samples.}
 
-\item{svd_K}{If TRUE and \code{nrow(K) < nrow(Z)}, then the SVD is done on \eqn{K} instead of \eqn{ZKZ^T}}
-
-\item{drop0_tol}{Values closer to zero than this will be set to zero when forming sparse matrices.}
-
-\item{mc.cores}{Number of processor cores used for parallel evaluations. Note that if \code{clusterType = 'mclapply'}, the memory requires grow rapidly with \code{mc.cores}, because
+\item{mc.cores}{Number of processor cores used for parallel evaluations. Note that this uses 'mclapply', so the memory requires grow rapidly with \code{mc.cores}, because
 the marker matrix gets duplicated in memory for each core.}
-
-\item{clusterType}{`mclapply`}
-
-\item{chunkSize}{To save memory, the tests can be processed in chunks.}
 
 \item{verbose}{Should progress be printed to the screen?}
 }
 \value{
 A list with two elements:
 \item{results}{A data frame with each row the results of the association test for a column of \code{X}, plus asssociated parameter values and statistics.}
-\item{setup}{A list with several objects needed for re-running the model, including \code{RE_setup}, \code{V_list_setup} and \code{downdate_Xs}. 
+\item{setup}{A list with several objects needed for re-running the model, including \code{V_setup} and \code{downdate_Xs}. 
   These can be re-passed to this function (or other GridLMM functions) to re-fit the model to the same data.}
 }
 \description{
-Performs a GWAS using a full grid search. Can perform LRTs, Wald-tests, or calculate Bayes Factors.
+Performs a GWAS using GridLMM algorithm. Can perform LRTs, Wald-tests, or calculate Bayes Factors. 
+By default, uses the targeted grid search heuristic (fast algorithm), though can perform a full grid search as well.
 }
 \details{
-Uses the GridLMM appraoch to evalue ML or REML solutions for each test, or calculate posterior distributions.
+GridLMM performs approximate likelihood or posterior-based inference for linear mixed models efficiently by
+ finding solutions to many models in parallel. Rather than optimizing to high precision for each separate model, GridLMM 
+ finds "good enough" solutions that satisfy many tests at once - so the expensive calculations can be re-used. It does
+ this by trying variance components on a grid, and selecting the best grid cell for each model. The \code{Full} algorithm
+ performs a full grid search over all variance component parameters. The \code{Fast} algorithm uses heuristics to reduce
+ the number of grid cells that need to be evaluated - focusing from the maximum likelihood solutions under a null model
+ with no markers, and then working out to neighboring grid cells from there.
+ 
+ Posterior inference involves an adaptive grid search. Generally, we start with a very coarse grid (with as few as 2-3 vertices per variance component)
+   and then progressively increase the grid resolution focusing only on regions of high posterior probability. This is controlled
+   by \code{h2_divisions}, \code{target_prob}, \code{thresh_nonzero}, and \code{thresh_nonzero_matrginal}. The sampling algorithm is as follows:
+   \itemize{
+   \item Start by evaluating the posterior at each vertex of a trial grid with resolution \eqn{m}
+   \item Find the minimum number of vertices needed to sum to \code{target_prob} of the current (discrete) posterior. 
+      Repeat for the marginal posteriors of each variance component#'    
+   \item If these numbers are smaller than \code{thresh_nonzero} or \code{thresh_nonzero_matrginal}, respectively, form a new grid
+      by increasing the grid resolution to \eqn{m/2}. Otherwise, STOP.
+   \item Begin evaluating the posterior at the new grid only at those grid vertices that are adjacent (in any dimension) to any of the top
+      grid vertices in the old grid.
+   \item Re-evaluate the distribution of the posterior over the new grid. If any new vertices contribute to the top \code{target_prob} fraction of the 
+      overall posterior, include these in the "top" set and return to step 4. 
+      Note - the prior weights for the grid vertices must be updated each time the grid increases in resolution.
+   \item Repeat steps 4-5 until no new grid vertices contribute to the "top" set.
+   \item Repeat steps 2-6 until a STOP is reached at step 3.
+   }
 }

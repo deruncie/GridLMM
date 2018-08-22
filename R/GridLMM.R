@@ -68,32 +68,22 @@ GridLMM_posterior = function(formula,data,weights = NULL,relmat = NULL,
                   thresh_nonzero = 10, thresh_nonzero_marginal = 0,
                   V_setup = NULL, save_V_folder = NULL, # character vector giving folder name to save V_list
                   diagonalize=T,svd_K = T,drop0_tol = 1e-10,mc.cores = my_detectCores(),verbose=T) {
+ 
+  MM = prepMM(formula,data,weights,other_formulas = NULL,
+              relmat,X=NULL,X_ID=NULL,proximal_markers=NULL,verbose)
+  lmod = MM$lmod
+  RE_setup = MM$RE_setup
   
-  # -------- check terms in formulas ---------- #
-  terms = c(all.vars(formula))
-  if(!all(terms %in% colnames(data))) {
-    missing_terms = terms[!terms %in% colnames(data)]
-    stop(sprintf('terms %s missing from data',paste(missing_terms,sep=', ')))
-  }
+  # -------- prep V_setup ---------- #
+  if(is.null(V_setup)) {
+    V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K = TRUE,drop0_tol = 1e-10,save_V_folder,verbose)
+  } 
   
-  # -------- Response ---------- #
-  n = nrow(data)
-  if(length(formula) == 3){
-    Y = as.matrix(data[,all.vars(formula[[2]]),drop=FALSE])
-    storage.mode(Y) = 'numeric'
-  } else{
-    stop('formula missing LHS or RHS?')
-  }
-  if(any(is.na(Y))) stop('Missing values in y')
+  Y = matrix(lmod$fr[,1])
+  colnames(Y) = 'y'
+  X_cov = lmod$X
+  data = lmod$fr
   
-  # -------- Constant Fixed effects ---------- #
-  X_cov = model.matrix(nobars(formula),data)
-  linear_combos = caret::findLinearCombos(X_cov)
-  if(!is.null(linear_combos$remove)) {
-    cat(sprintf('dropping column(s) %s to make covariates full rank\n',paste(linear_combos$remove,sep=',')))
-    X_cov = X_cov[,-linear_combos$remove]
-  }
-  if(any(is.na(X_cov))) stop('Missing values in covariates')
   p = ncol(X_cov)
   if(is.null(inv_prior_X)) {
     inv_prior_X = rep(0,p)
@@ -103,13 +93,6 @@ GridLMM_posterior = function(formula,data,weights = NULL,relmat = NULL,
     stop('wrong length of inv_prior_X')
   }
   
-  # -------- prep V ---------- #
-  if(is.null(V_setup))  {
-    RE_setup = make_RE_setup(formula = formula,data = data,relmat = relmat)
-    V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K,drop0_tol,save_V_folder,verbose)
-  } else{
-    RE_setup = V_setup$RE_setup
-  }
   
   # -------- rotate data ---------- #
   # speeds to everything if a single random effect
@@ -139,14 +122,9 @@ GridLMM_posterior = function(formula,data,weights = NULL,relmat = NULL,
     registerDoParallel(mc.cores)
     new_h2s_solutions = foreach(h2s = iter(h2s_to_test,by = 'row')) %do% {
       chol_V_setup = make_chol_V_setup(V_setup,unlist(h2s))
-      if(inherits(chol_V_setup$chol_V,'Matrix')){ 
-        chol_Vinv = t(solve(chol_V_setup$chol_V))
-      } else{
-        chol_Vinv = t(backsolve(chol_V_setup$chol_V,diag(1,ncol(chol_V_setup$chol_V))))
-      }
-      V_log_det <- chol_V_setup$V_log_det
-      
-      SSs <- GridLMM_SS_dense_c(Y,as.matrix(chol_Vinv),X_cov, list(matrix(0,n,0)),integer(),inv_prior_X,V_log_det)
+      chol_Vi = chol_V_setup$chol_V
+      V_log_det = 2*sum(log(diag(chol_Vi)))
+      SSs <- GridLMM_SS_matrix(Y,chol_Vi,X_cov,NULL,integer(),inv_prior_X)
       
       mu_star = SSs$beta_hats
       V_star_inv = matrix(0,length(mu_star),length(mu_star))
@@ -260,41 +238,22 @@ GridLMM_ML = function(formula,data,weights = NULL,relmat = NULL,
                      V_setup = NULL, save_V_folder = NULL, # character vector giving folder name to save V_list
                      diagonalize=T,svd_K = T,drop0_tol = 1e-10,mc.cores = my_detectCores(),verbose=T) {
   
-  # -------- check terms in formulas ---------- #
-  terms = c(all.vars(formula))
-  if(!all(terms %in% colnames(data))) {
-    missing_terms = terms[!terms %in% colnames(data)]
-    stop(sprintf('terms %s missing from data',paste(missing_terms,sep=', ')))
-  }
+ 
+  MM = prepMM(formula,data,weights,other_formulas = NULL,
+              relmat,X=NULL,X_ID=NULL,proximal_markers=NULL,verbose)
+  lmod = MM$lmod
+  RE_setup = MM$RE_setup
   
-  # -------- Response ---------- #
-  n = nrow(data)
-  if(length(formula) == 3){
-    Y = as.matrix(data[,all.vars(formula[[2]]),drop=FALSE])
-    storage.mode(Y) = 'numeric'
-  } else{
-    stop('formula missing LHS or RHS?')
-  }
-  if(any(is.na(Y))) stop('Missing values in y')
+  # -------- prep V_setup ---------- #
+  if(is.null(V_setup)) {
+    V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K = TRUE,drop0_tol = 1e-10,save_V_folder,verbose)
+  } 
   
-  # -------- Constant Fixed effects ---------- #
-  X_cov = model.matrix(nobars(formula),data)
-  linear_combos = caret::findLinearCombos(X_cov)
-  if(!is.null(linear_combos$remove)) {
-    cat(sprintf('dropping column(s) %s to make covariates full rank\n',paste(linear_combos$remove,sep=',')))
-    X_cov = X_cov[,-linear_combos$remove]
-  }
-  if(any(is.na(X_cov))) stop('Missing values in covariates')
-  
+  Y = matrix(lmod$fr[,1])
+  colnames(Y) = 'y'
+  X_cov = lmod$X
+  data = lmod$fr
   p = ncol(X_cov)
-  
-  # -------- prep V ---------- #
-  if(is.null(V_setup))  {
-    RE_setup = make_RE_setup(formula = formula,data = data,relmat = relmat)
-    V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K,drop0_tol,save_V_folder,verbose)
-  } else{
-    RE_setup = V_setup$RE_setup
-  }
   
   # -------- rotate data ---------- #
   # speeds up everything if a single random effect
@@ -322,10 +281,13 @@ GridLMM_ML = function(formula,data,weights = NULL,relmat = NULL,
     registerDoParallel(mc.cores)
     results_list = foreach(h2s = iter(h2s_to_test,by = 'row')) %dopar% {
       chol_V_setup = make_chol_V_setup(V_setup,unlist(h2s))
-      chol_V = chol_V_setup$chol_V
-      V_log_det <- chol_V_setup$V_log_det
+      chol_Vi = chol_V_setup$chol_V
       inv_prior_X = rep(0,p)
-      calc_LL(Y,X_cov,list(matrix(0,n,0)),t(h2s),chol_V,V_log_det,inv_prior_X,NULL,NULL,REML,BF=FALSE)
+      calc_LL(Y,X_cov,X_list=NULL,t(h2s),chol_Vi,inv_prior_X,NULL,NULL,REML,BF=FALSE)
+      # SSs <- GridLMM_SS_matrix(Y,chol_Vi,X_cov,list(matrix(0,n,0)),integer(),inv_prior_X)
+      # chol_V = chol_V_setup$chol_V
+      # V_log_det <- chol_V_setup$V_log_det
+      # calc_LL(Y,X_cov,list(matrix(0,n,0)),t(h2s),chol_V,V_log_det,inv_prior_X,NULL,NULL,REML,BF=FALSE)
     } 
     tested_h2s = rbind(tested_h2s,h2s_to_test)
     if(length(results) > 0) {

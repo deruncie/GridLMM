@@ -53,43 +53,23 @@ data$y = y
 g0 = GridLMM_ML(y~cov+(1|Group)+(0+cov|Group),data,relmat = list(Group = tcrossprod(scale_SNPs(Xg[,1:50],scaleX = F))/50))
 g0$results
 g1 = GridLMM_GWAS(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',
-                  # EMMAX_start = F,h2_start = c(0.9,0.1),
-                  h2_divisions = 10, save_V_list = 'V_folder',mc.cores=1)
-proximal_matrix = diag(1,50)
-diag(proximal_matrix[-1,]) = 1
-diag(proximal_matrix[-c(1:2),]) = 1
-diag(proximal_matrix[-c(1:3),]) = 1
-proximal_matrix[1:4,1:4]=1
-g2 = GridLMM_GWAS(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_divisions = 10,mc.cores=1,proximal_matrix = proximal_matrix)
-g3 = GridLMM_GWAS(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',proximal_matrix = proximal_matrix,h2_divisions = 10)
-g3b = GridLMM_GWAS(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_divisions = 10,
-                   RE_setup = g3$setup$RE_setup, V_list = g3$setup$V_list, downdate_Xs = g3$setup$downdate_Xs)
+                  # h2_start = c(0.9,0.1),
+                  algorithm = 'Full',
+                  h2_step = 0.1, save_V_folder = 'V_folder',mc.cores=1)
+proximal_markers = lapply(1:50,function(x) seq(max(1,x-3),min(50,x+3)))
+g2 = GridLMM_GWAS(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_step = 0.1,mc.cores=1,algorithm = 'Full',
+                  proximal_markers = proximal_markers)
+g2b = GridLMM_GWAS(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',proximal_markers = proximal_markers, 
+                   V_setup = g2$setup$V_setup)
 head(g1$results)
 head(g2$results)
+head(g2b$results)
+
+g3 = GridLMM_GWAS(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_step = 0.01,mc.cores=1,algorithm = 'Fast')
+g4 = GridLMM_GWAS(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_step = 0.01,mc.cores=1,algorithm = 'Fast'
+                  ,proximal_markers = proximal_markers)
 head(g3$results)
-head(g3b$results)
-
-g4 = GridLMM_GWAS_fast(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',max_step = 100,h2_step = 0.01,mc.cores=1)
-g4b = GridLMM_GWAS_fast(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',max_step = 100,h2_step = 0.01,mc.cores=1,proximal_matrix = proximal_matrix,centerX=T)
 head(g4$results)
-head(g4b$results)
-
-gg4 = GridLMM_GWAS2(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',max_step = 100,h2_step = 0.01,mc.cores=1,method='ML')
-plot(g4$results$p_value_ML,gg4$results$p_value_ML,log='xy')
-gg4b = GridLMM_GWAS2(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',centerX = T,
-                     max_step = 100,h2_step = 0.01,mc.cores=1,method='ML',
-                     proximal_markers = lapply(1:nrow(proximal_matrix),function(x) which(proximal_matrix[x,]==1))
-                     ,proximal_Xs = list(scale_SNPs(Xg,centerX = T,scaleX = F))
-                     )
-plot(g4b$results$p_value_ML,gg4b$results$p_value_ML,log='xy')
-gg4c = GridLMM_GWAS2(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',algorithm = 'Full',
-                     max_step = 100,h2_step = 0.01,mc.cores=1,method='REML',
-                     proximal_markers = lapply(1:nrow(proximal_matrix),function(x) which(proximal_matrix[x,]==1)))
-plot(g4b$results$p_value_ML,gg4c$results$p_value_REML,log='xy')
-gg4d = GridLMM_GWAS2(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',
-                     max_step = 100,h2_step = 0.01,mc.cores=1,method='BF',inv_prior_X = 1,
-                     proximal_markers = lapply(1:nrow(proximal_matrix),function(x) which(proximal_matrix[x,]==1)))
-plot(g4b$results$p_value_ML,-gg4d$results$BF,log='x')
 
 # Run GxEMMAnet
 library(glmnet)
@@ -97,12 +77,14 @@ library(glmnet)
 h2 = 0.5
 prop_X = 0.6
 
+p = 1000
 p_g = 10 # include 10 coefficients
 p_gxe = 0 # include 0 gxe coefficients
 beta = c(rep(1,p_g),rep(0,p-p_g))
 beta_gxe = c(rep(0,p_g),rep(1,p_gxe),rep(0,p-p_g-p_gxe))  
 
-# X = cbind(1,matrix(sample(c(0,1),n*(1000-1),replace=T),nrow = n))
+X = cbind(1,matrix(sample(c(0,1),n*(1000-1),replace=T),nrow = n))
+rownames(X) = data$ID
 g = X %*% beta + data$cov*(X %*% beta_gxe);g=g/sd(g)
 e = rnorm(n);e=e/sd(e)
 y = data$cov * beta_cov + sqrt(prop_X) * c(g) + sqrt(1-prop_X) * e + sqrt(h2/(1-h2))* Z %*% rnorm(nG) 
@@ -111,7 +93,7 @@ data$y = y
 
 # LASSO with random effect
 i = sample(1:nrow(X))
-gLASSO = GridLMMnet(y~cov + (1|Group),data,X,alpha = 1,h2_divisions = 100,diagonalize = T)
+gLASSO = GridLMMnet(y~cov + (1|Group),data,X,X_ID = 'ID',alpha = 1,h2_divisions = 100,diagonalize = T)
 
 # a = GridLMM_ML(y~cov + (1|Group),data,X=X[,which(gLASSO$beta[-c(1:2),80] != 0)],ML=T,REML=T,initial_step = 0.01);a$results
 
@@ -131,7 +113,7 @@ plot(gLASSOcv);points(log(gLcv$lambda),gLcv$cvm)
 plot(gLcv)
 
 gLASSO_setup = GridLMMnet_setup(y~cov + (1|Group),data,X,alpha = 1,diagonalize = F,foldid = gLcv$foldid,mc.cores = 8, save_V_folder = 'V_folder')
-gLASSO_setup$h2s_matrix = setup_Grid(names(gLASSO_setup$V_setup$RE_setup),h2_divisions = 8*4)
+gLASSO_setup$h2s_matrix = setup_Grid(names(gLASSO_setup$V_setup$RE_setup),h2_step = 1/(8*4))
 cl = start_cluster(8,'FORK')
 gLASSO_setup$V_setup = calculate_Grid(gLASSO_setup$V_setup,gLASSO_setup$h2s_matrix)
 stop_cluster(cl)

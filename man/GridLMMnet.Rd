@@ -4,22 +4,26 @@
 \alias{GridLMMnet}
 \title{LASSO solutions in a linear mixed model using GridLMM}
 \usage{
-GridLMMnet(formula, data, X, weights = NULL, centerX = TRUE,
+GridLMMnet(formula, data, X, X_ID = "ID", weights = NULL, centerX = TRUE,
   scaleX = TRUE, relmat = NULL, h2_divisions = 10, h2_start = NULL,
   alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs < nvars, 0.01,
   1e-04), lambda = NULL, nfolds = NULL, foldid = NULL, RE_setup = NULL,
-  V_setup = NULL, save_V_folder = NULL, diagonalize = T, svd_K = T,
-  drop0_tol = 1e-10, mc.cores = parallel::detectCores(),
-  clusterType = "mclapply", verbose = T, ...)
+  V_setup = NULL, save_V_folder = NULL, diagonalize = T,
+  mc.cores = parallel::detectCores(), clusterType = "mclapply",
+  verbose = T, ...)
 }
 \arguments{
 \item{formula}{A two-sided linear formula as used in \code{\link[lme4]{lmer}} describing the fixed-effects
 and random-effects of the model on the RHS and the response on the LHS. Note: correlated random-effects
-are not implemented, so using one or two vertical bars (\code{|}) or one is identical. At least one random effect is needed.}
+are not implemented, so using one or two vertical bars (\code{|}) or one is identical. At least one random effect is needed.
+Unlike \code{lmer}, random effects can have as many as there are observations.}
 
 \item{data}{A data frame containing the variables named in \code{formula}.}
 
 \item{X}{Variables in model that well be penalized with the elastic net penalty. Covariates specified in \code{formula} are not penalized.}
+
+\item{X_ID}{Column of \code{data} that identifies the row of \code{X} that corresponding to each observation. 
+It is possible that multiple observations reference the same row of \code{X}.}
 
 \item{weights}{An optional vector of observation-specific weights.}
 
@@ -27,11 +31,15 @@ are not implemented, so using one or two vertical bars (\code{|}) or one is iden
 
 \item{scaleX}{TRUE/FALSE for each. Applied to the \code{X} matrix before using \code{X} to form any GRMs.}
 
-\item{relmat}{A list of matrices that are proportional to the (within) covariance structures of the group level effects. 
-The names of the matrices should correspond to the columns in \code{data} that are used as grouping factors. All levels
+\item{relmat}{Either:
+1) A list of matrices that are proportional to the (within) covariance structures of the group level effects. 
+2) A list of lists with elements (\code{K}, \code{p}) with a covariance matrix and an integer listing the number of markers 
+    used to estimate the covariance matrix. This is used for appropriate downdating of \code{V} to remove proximal markers for each test.
+The names of the matrices / list elements should correspond to the columns in \code{data} that are used as grouping factors. All levels
 of the grouping factor should appear as rownames of the corresponding matrix.}
 
-\item{h2_start}{Optional. Matrix with each row a vector of \eqn{h^2} parameters defining starting values for the grid. Typically ML/REML solutions for the null model. 
+\item{h2_start}{Optional. Matrix with each row a vector of \eqn{h^2} parameters defining starting values for the grid. 
+Typically ML/REML solutions for the null model. 
 If null, will be calculated using \link{GridLMM_ML}.}
 
 \item{alpha}{The elasticnet mixing parameter, with
@@ -76,14 +84,8 @@ If null, V decompositions are stored in memory}
 \item{diagonalize}{If TRUE and the model includes only a single random effect, the "GEMMA" trick will be used to diagonalize V. This is done
 by calculating the SVD of K, which can be slow for large samples.}
 
-\item{svd_K}{If TRUE and \code{nrow(K) < nrow(Z)}, then the SVD is done on \eqn{K} instead of \eqn{ZKZ^T}}
-
-\item{drop0_tol}{Values closer to zero than this will be set to zero when forming sparse matrices.}
-
-\item{mc.cores}{Number of processor cores used for parallel evaluations. Note that if \code{clusterType = 'mclapply'}, the memory requires grow rapidly with \code{mc.cores}, because
+\item{mc.cores}{Number of processor cores used for parallel evaluations. Note that this uses 'mclapply', so the memory requires grow rapidly with \code{mc.cores}, because
 the marker matrix gets duplicated in memory for each core.}
-
-\item{clusterType}{`mclapply`}
 
 \item{verbose}{Should progress be printed to the screen?}
 

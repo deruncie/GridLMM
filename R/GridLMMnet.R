@@ -5,7 +5,7 @@
 #' @details Finds the full LASSO or Elastic Net solution path by running \code{\link[glmnet]{glmnet}} at each grid vertex.
 #'     If \code{foldid} is provided, cross-validation scores will be calculated.
 #'
-#' @inheritParams GridLMM_GWAS_fast
+#' @inheritParams GridLMM_GWAS
 #' @inheritParams glmnet::glmnet
 #' @param X Variables in model that well be penalized with the elastic net penalty. Covariates specified in \code{formula} are not penalized.
 #' @param foldid vector of integers that divide the data into a set of non-overlapping folds for cross-validation.
@@ -16,29 +16,29 @@
 #' @export
 #'
 #' @examples
-GridLMMnet = function(formula,data,X, weights = NULL, 
+GridLMMnet = function(formula,data,X, X_ID = 'ID', weights = NULL, 
                       centerX = TRUE,scaleX = TRUE,relmat = NULL,
                       h2_divisions = 10, h2_start = NULL,
                       alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001), lambda=NULL,
                       nfolds = NULL,foldid = NULL,
                       RE_setup = NULL, V_setup = NULL, save_V_folder = NULL,
-                      diagonalize=T,svd_K = T,drop0_tol = 1e-10,mc.cores = parallel::detectCores(),clusterType = 'mclapply',verbose=T,...) 
+                      diagonalize=T,mc.cores = parallel::detectCores(),clusterType = 'mclapply',verbose=T,...) 
 {
   
   # ----------- setup model ------------- #
   
-  setup = GridLMMnet_setup(formula,data,X,weights,
+  setup = GridLMMnet_setup(formula,data,X,X_ID, weights,
                            centerX,scaleX,relmat,
                            alpha,nlambda,substitute(lambda.min.ratio),lambda,
                            nfolds,foldid,
                            RE_setup,V_setup,save_V_folder,
-                           diagonalize,svd_K,drop0_tol,mc.cores,clusterType,verbose,...)
+                           diagonalize,mc.cores,clusterType,verbose,...)
   nobs = length(setup$y)
   nvars = ncol(setup$X_full)
   
   
   # ----------- setup Grid ------------- #
-  setup$h2s_matrix = setup_Grid(names(setup$V_setup$RE_setup),h2_divisions,h2_start)
+  setup$h2s_matrix = setup_Grid(names(setup$V_setup$RE_setup),1/h2_divisions,h2_start)
   
   cl = start_cluster(mc.cores,clusterType)
   setup$V_setup = calculate_Grid(setup$V_setup,setup$h2s_matrix,verbose)
@@ -66,12 +66,12 @@ GridLMMnet = function(formula,data,X, weights = NULL,
   
 }
 
-GridLMMnet_setup = function(formula,data,X, weights = NULL, 
+GridLMMnet_setup = function(formula,data,X, X_ID = 'ID', weights = NULL, 
                             centerX = TRUE,scaleX = TRUE,relmat = NULL,
                             alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001), lambda=NULL,
                             nfolds = NULL,foldid = NULL,
-                            RE_setup = NULL, V_list_setup = NULL, save_V_folder = NULL,
-                            diagonalize=T,svd_K = T,drop0_tol = 1e-10,mc.cores = parallel::detectCores(),clusterType = 'mclapply',verbose=T,...) {
+                            RE_setup = NULL, V_setup = NULL, save_V_folder = NULL,
+                            diagonalize=T,mc.cores = parallel::detectCores(),clusterType = 'mclapply',verbose=T,...) {
  
   
   # -------- sort by foldid ---------- #
@@ -88,46 +88,36 @@ GridLMMnet_setup = function(formula,data,X, weights = NULL,
     new_order = order(foldid)
     data = data[new_order,,drop=FALSE]
     X = X[new_order,,drop=FALSE]
-    weights = weights[new_order]
+    if(!is.null(weights)) weights = weights[new_order]
     foldid = foldid[new_order]
     diagonalize = F # can't diagonalize with cross-validation
   }
   
+  # -------- prep Mixed Models ---------- #
+  MM = prepMM(formula,data,weights,other_formulas = NULL,
+              relmat,X,X_ID,proximal_markers=NULL,verbose)
+  lmod = MM$lmod
+  RE_setup = MM$RE_setup
   
-  # -------- check terms in formulas ---------- #
-  terms = c(all.vars(formula))
-  if(!all(terms %in% colnames(data))) {
-    missing_terms = terms[!terms %in% colnames(data)]
-    stop(sprintf('terms %s missing from data',paste(missing_terms,sep=', ')))
-  }
+  # -------- prep V_setup ---------- #
+  if(is.null(V_setup)) {
+    V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K = TRUE,drop0_tol = 1e-10,save_V_folder,verbose)
+  } 
   
-  # -------- Response ---------- #
-  n = nrow(data)
-  if(length(formula) == 3){
-    y = as.matrix(data[,all.vars(formula[[2]])])
-  } else{
-    stop('Check if formula missing LHS or RHS.')
-  }
-  nobs = n
-  
-  # -------- Constant Fixed effects ---------- #
-  X_cov = model.matrix(nobars(formula),data)
-  linear_combos = caret::findLinearCombos(X_cov)
-  if(!is.null(linear_combos$remove)) {
-    cat(sprintf('dropping column(s) %s to make covariates full rank\n',paste(linear_combos$remove,sep=',')))
-    X_cov = X_cov[,-linear_combos$remove]
-  }
-  if(any(is.na(X_cov))) stop('Missing values in covariates')
+  y = matrix(lmod$fr[,1])
+  n = nobs = nrow(y)
+  X_cov = lmod$X
   intercept = 0
   if(ncol(X_cov)>0 && all(X_cov[,1]==1)) intercept = 1
+  data = lmod$fr
+  
+  Z_X = model.matrix(formula(sprintf("~0+%s",X_ID)),droplevels(data))
+  colnames(Z_X) = sub(X_ID,'',colnames(Z_X),fixed = T)
+  if(is.null(rownames(X))) stop(sprintf('X must have rownames that correspond with column %s in data',X_ID))
+  stopifnot(all(colnames(Z_X) %in% rownames(X)))
+  X = Z_X %*% X[colnames(Z_X),]
   
   nvars = ncol(X_cov) + ncol(X)
-  
-  # -------- Random effects ---------- #
-  if(is.null(RE_setup)) {
-    RE_setup = make_RE_setup(formula = formula,data,relmat = relmat,verbose=verbose)
-    V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K,drop0_tol,save_V_folder,verbose)
-  }
   penalty.factor = c(rep(0,ncol(X_cov)),rep(1,ncol(X)))
   X_full = cbind(X_cov,X)
   
@@ -159,56 +149,6 @@ GridLMMnet_setup = function(formula,data,X, weights = NULL,
   return(setup)  
    
 }
-
-
-setup_Grid = function(RE_names,h2_divisions,h2_start = NULL){
-  
-  # -------- Form matrix of h2s to test ---------- #
-  n_RE = length(RE_names)
-  
-  if(length(h2_divisions) < n_RE){
-    if(length(h2_divisions) != 1) stop('Must provide either 1 h2_divisions parameter, or 1 for each random effect')
-    h2_divisions = rep(h2_divisions,n_RE)
-  }
-  if(is.null(names(h2_divisions))) {
-    names(h2_divisions) = RE_names
-  }
-  h2s_matrix = expand.grid(lapply(RE_names,function(re) seq(0,1,length = h2_divisions[[re]]+1)))
-  colnames(h2s_matrix) = RE_names
-  h2s_matrix = t(h2s_matrix[rowSums(h2s_matrix) < 1,,drop=FALSE])
-  if(!is.null(h2_start)) {
-    if(length(h2_start) != nrow(h2s_matrix)) stop('wrong length h2_start vector provided')
-    if(!is.null(names(h2_start))){
-      if(!all(rownames(h2s_matrix) %in% names(h2_start))) stop('missing h2s in h2_start')
-      h2s_matrix = cbind(h2s_matrix,h2_start[rownames(h2s_matrix)])
-    } else{
-      h2s_matrix = cbind(h2s_matrix,h2_start)
-    }
-  }
-  colnames(h2s_matrix) = NULL
-  
-  return(h2s_matrix)
-}
-
-calculate_Grid = function(V_setup,h2s_matrix,verbose = TRUE){
-  
-  if(verbose) {
-    sprintf('Generating V decompositions for %d grid cells', ncol(h2s_matrix))
-    pb = txtProgressBar(min=0,max = ncol(h2s_matrix),style=3)
-  }
-  
-  V_setup$chol_V_list = foreach(h2s = iter(t(h2s_matrix),by='row')) %dopar% {
-    h2s = h2s[1,]
-    chol_V_setup = make_chol_V_setup(V_setup,h2s)
-    if(!is.null(V_setup$save_V_folder)) chol_V_setup = chol_V_setup$file  # only store file name if save_V_folder is provided
-    if(verbose && exists('pb')) setTxtProgressBar(pb, getTxtProgressBar(pb)+1)
-    return(chol_V_setup)
-  }
-  if(verbose && exists('pb')) close(pb)
-  
-  return(V_setup)
-}
-
 
 run_glmnet_V = function(X_full,y, chol_V, alpha = alpha, 
                         lambda = NULL,nlambda, lambda.min.ratio,get_max_lambda = FALSE,penalty.factor,holdOut = NULL,...){

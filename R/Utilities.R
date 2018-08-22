@@ -1,6 +1,15 @@
-make_RE_setup = function(formula,data,relmat = NULL,X = NULL,X_ID = NULL,proximal_matrix = NULL,verbose = FALSE) {
+prepMM = function(formula,data,weights = NULL,other_formulas = NULL,
+                  relmat = NULL, X = NULL, X_ID = 'ID',proximal_markers = NULL,
+                  verbose = TRUE) {
   
-  # -------- Random effects ---------- #
+  # ensure data has rownames
+  if(is.null(rownames(data))) rownames(data) = 1:nrow(data)
+  
+  # check that data has appropriate columns
+  extra_terms = unique(c(X_ID,do.call(c,lapply(other_formulas,function(x) all.vars(x)))))
+  if(!all(extra_terms %in% colnames(data))) stop(sprintf("Terms '%s' missing from data",paste(setdiff(extra_terms,colnames(data)),collapse=', ')))
+  
+  # check that RE's have approporiate levels in data
   RE_levels = list() # a list of levels for each of the random effects
   if(is.null(relmat)) relmat = list()
   for(re in names(relmat)) {
@@ -26,13 +35,22 @@ make_RE_setup = function(formula,data,relmat = NULL,X = NULL,X_ID = NULL,proxima
   if(!is.null(X_ID)) {
     if(!X_ID %in% colnames(data)) stop(sprintf('X_ID column %s not in data',X_ID))
     data[[X_ID]] = as.factor(data[[X_ID]])
-    if(is.null(rownames(X)) || !all(data[[X_ID]] %in% rownames(X))) stop('X must have rownames and all levels of data[[X_ID]] must be in rownames(X)')
+    # if(is.null(rownames(X)) || !all(data[[X_ID]] %in% rownames(X))) stop('X must have rownames and all levels of data[[X_ID]] must be in rownames(X)')
   }
   
-  # use lme4 functions to parse random effects
-  #  note: correlated random effects are not allowed. Will convert to un-correlated REs
-  RE_terms = mkReTrms(findbars(formula),data,drop.unused.levels = FALSE)  # extracts terms and builds Zt matrices
-  if(!is.null(X_ID) && !X_ID %in% names(RE_terms$cnms)) warning(sprintf("No covariance given SNPs specified in error formula. To specify, add a term like (1|%s)",X_ID))
+  # Use lme4 to evaluate formula in data
+  lmod <- lme4::lFormula(formula,data=data,weights=weights,
+                         control = lme4::lmerControl(check.nobs.vs.nlev = 'ignore',check.nobs.vs.nRE = 'ignore'))
+  
+  # Add in other variables from data
+  for(term in extra_terms) {
+    if(term %in% colnames(lmod$fr) == F) lmod$fr[[term]] = data[match(rownames(lmod$fr),rownames(data)),term]
+  }
+  
+  # compute RE_setup
+  RE_terms = lmod$reTrms
+  
+  # if(!is.null(X_ID) && !X_ID %in% names(RE_terms$cnms)) warning(sprintf("No covariance given SNPs specified in error formula. To specify, add a term like (1|%s)",X_ID))
   
   # construct the RE_setup list
   # contains:
@@ -45,7 +63,7 @@ make_RE_setup = function(formula,data,relmat = NULL,X = NULL,X_ID = NULL,proxima
     
     # extract combined Z matrix
     combined_Zt = RE_terms$Ztlist[[i]]
-    Zs_term = tapply(1:nrow(combined_Zt),gl(n_factors,1,nrow(combined_Zt),labels = RE_terms$cnms[[i]]),function(x) t(combined_Zt[x,,drop=FALSE]))
+    Zs_term = tapply(1:nrow(combined_Zt),gl(n_factors,1,nrow(combined_Zt),labels = RE_terms$cnms[[i]]),function(x) Matrix::t(combined_Zt[x,,drop=FALSE]))
     
     # extract K from relmat. If missing, assign to NULL
     K = NULL
@@ -55,7 +73,7 @@ make_RE_setup = function(formula,data,relmat = NULL,X = NULL,X_ID = NULL,proxima
       if(term %in% names(relmat)){
         if(verbose) print('using provided RRM.')
         if(is.list(relmat[[term]])){
-          if(verbose && !is.null(proximal_matrix)) print('Note: X should be centered and scaled as it was for calculating RRM')
+          if(verbose && !is.null(proximal_markers)) print('Note: X should be centered and scaled as it was for calculating RRM')
           K = relmat[[term]]$K
           if(!is.null(relmat[[term]]$p)){
             p = relmat[[term]]$p
@@ -69,8 +87,8 @@ make_RE_setup = function(formula,data,relmat = NULL,X = NULL,X_ID = NULL,proxima
         K = tcrossprod(X)/p
         relmat[[term]] = K
       }
-      if(!is.null(proximal_matrix)) {
-        p_test = mean(rowSums(proximal_matrix))
+      if(!is.null(proximal_markers)) {
+        p_test = mean(lengths(proximal_markers))
       }
     } else if(term %in% names(relmat)){
       K = relmat[[term]]
@@ -114,9 +132,9 @@ make_RE_setup = function(formula,data,relmat = NULL,X = NULL,X_ID = NULL,proxima
     }
     
   }
-  return(RE_setup)
+  
+  return(list(lmod = lmod, RE_setup = RE_setup))
 }
-
 
 make_V_setup = function(RE_setup,
                         weights = NULL,
@@ -279,6 +297,7 @@ make_chol_V_setup = function(V_setup,h2s){
   } else{ # V is dense, use Eigen LLT
     chol_V = chol_c(V)
   }
+  if(inherits(chol_V,'dtCMatrix')) chol_V = as(chol_V,'dgCMatrix')
   V_log_det = 2*sum(log(diag(chol_V)))
   
   chol_V_setup = list(chol_V = chol_V,V_log_det = V_log_det, h2s = h2s)
@@ -340,6 +359,54 @@ scale_SNPs = function(X,centerX=TRUE,scaleX=TRUE,fillNAX = FALSE){
     }
   }
   X
+}
+
+# makes a grid over a set of h2s.
+# very simlar to make_h2s_matrix
+# probably could/should combine functions
+setup_Grid = function(RE_names,h2_step,h2_start = NULL){
+  
+  # -------- Form matrix of h2s to test ---------- #
+  n_RE = length(RE_names)
+  
+  if(length(h2_step) < n_RE){
+    if(length(h2_step) != 1) stop('Must provide either 1 h2_step parameter, or 1 for each random effect')
+    h2_step = rep(h2_step,n_RE)
+  }
+  if(is.null(names(h2_step))) {
+    names(h2_step) = RE_names
+  }
+  
+  if(is.null(h2_start)) h2_start = rep(0,length(RE_names))
+  if(length(h2_start) != length(RE_names)) stop("Wrong length of h2_start")
+  if(is.null(names(h2_start))) names(h2_start) = RE_names
+  
+  h2s_matrix = expand.grid(lapply(RE_names,function(re) h2_start[[re]] + seq(-1,2,by = h2_step[[re]])))
+  colnames(h2s_matrix) = RE_names
+  h2s_matrix = h2s_matrix[rowSums(h2s_matrix<0) == 0,,drop=FALSE]
+  h2s_matrix = t(h2s_matrix[rowSums(h2s_matrix) < 1,,drop=FALSE])
+  colnames(h2s_matrix) = NULL
+  
+  return(h2s_matrix)
+}
+
+calculate_Grid = function(V_setup,h2s_matrix,verbose = TRUE){
+  
+  if(verbose) {
+    sprintf('Generating V decompositions for %d grid cells', ncol(h2s_matrix))
+    pb = txtProgressBar(min=0,max = ncol(h2s_matrix),style=3)
+  }
+  
+  V_setup$chol_V_list = foreach(h2s = iter(t(h2s_matrix),by='row')) %dopar% {
+    h2s = h2s[1,]
+    chol_V_setup = make_chol_V_setup(V_setup,h2s)
+    if(!is.null(V_setup$save_V_folder)) chol_V_setup = chol_V_setup$file  # only store file name if save_V_folder is provided
+    if(verbose && exists('pb')) setTxtProgressBar(pb, getTxtProgressBar(pb)+1)
+    return(chol_V_setup)
+  }
+  if(verbose && exists('pb')) close(pb)
+  
+  return(V_setup)
 }
 
 
@@ -438,7 +505,7 @@ get_LL = function(SSs,X_cov,X_list,active_X_list,n,m,ML,REML,BF){
   if(REML) {
     if(is.null(SSs$log_det_X)) SSs$log_det_X = log_det_of_XtX(X_cov,X_list,active_X_list)
     b = ncol(X_cov) + length(X_list)
-    if(ncol(X_list[[1]]) == 0) b = ncol(X_cov)
+    if(length(X_list) == 0) b = ncol(X_cov)
     # The following is not needed. Should use eq 13 from Kang et al 2008. Note: if M is the identity with the first k rows removed, (M(X'VinvX)M')' is just crossprod(V_star_L[-c(1:k),-c(1:k)])
     # somehow need to figure out how to specify M
     SSs$F_hats = F_hats(SSs$beta_hats,SSs$RSSs,SSs$V_star_L,n,b,m)  
@@ -453,11 +520,12 @@ get_LL = function(SSs,X_cov,X_list,active_X_list,n,m,ML,REML,BF){
 }
 
 
-calc_LL = function(Y,X_cov,X_list,h2s,chol_Vi,V_log_det,inv_prior_X,downdate_Xs = NULL,n_SNPs_downdated_RRM = NULL,REML = TRUE, BF = TRUE,active_X_list = NULL){  
+calc_LL = function(Y,X_cov,X_list,h2s,chol_Vi,inv_prior_X,
+                    downdate_Xs = NULL,n_SNPs_downdated_RRM = NULL,REML = TRUE, BF = TRUE,active_X_list = NULL){  
   if(is.null(active_X_list)) {
     if(!is.null(downdate_Xs)) {
-      active_X_list = 1:length(downdate_Xs[[1]])
-    } else if(ncol(X_list[[1]]) == 0) {
+      active_X_list = 1:length(downdate_Xs)
+    } else if(length(X_list) == 0) {
       active_X_list = integer()
     } else {
       active_X_list = 1:ncol(X_list[[1]])
@@ -466,51 +534,12 @@ calc_LL = function(Y,X_cov,X_list,h2s,chol_Vi,V_log_det,inv_prior_X,downdate_Xs 
   m = ncol(Y)
   n = nrow(Y)
   if(is.null(downdate_Xs)) {
-    if(inherits(chol_Vi,'Matrix')){
-      inv_chol_Vi_transpose = t(solve(chol_Vi))
-      inv_chol_Vi_transpose = as(inv_chol_Vi_transpose,'dgCMatrix')
-      SSs <- GridLMM_SS_sparse_c(Y,inv_chol_Vi_transpose,X_cov, X_list,active_X_list,inv_prior_X,V_log_det)
-    } else{
-      inv_chol_Vi_transpose = t(backsolve(chol_Vi,diag(1,ncol(chol_Vi))))
-      SSs <- GridLMM_SS_dense_c(Y,inv_chol_Vi_transpose,X_cov, X_list,active_X_list,inv_prior_X,V_log_det)
-      # chol_ViT = t(chol_Vi)
-      # chol_Vis = as(chol_Vi,'CsparseMatrix')
-      # SSs2 <- GridLMM_SS_dense_c2(Y,chol_Vi,X_cov, X_list,active_X_list,inv_prior_X)
-      # sapply(names(SSs),function(x) max(abs(SSs[[x]]-SSs2[[x]])))
-      # library(microbenchmark)
-      # microbenchmark(
-      #   # SSs <- GridLMM_SS_dense_c(Y,inv_chol_Vi_transpose,X_cov, X_list,active_X_list,inv_prior_X,V_log_det),
-      #   # SSs <- GridLMM_SS_sparse_c(Y,inv_chol_Vi_transpose,X_cov, X_list,active_X_list,inv_prior_X,V_log_det),
-      #   SSs3 <- GridLMM_SS_dense_c3(Y,inv_chol_Vi_transpose,X_cov, X_list,active_X_list,inv_prior_X,V_log_det),
-      #   SSs2 <- GridLMM_SS_dense_c2(Y,chol_Vi,X_cov, X_list,active_X_list,inv_prior_X),
-      #   # SSs4 <- GridLMM_SS_dense_c4(Y,chol_Vi,X_cov, X_list,active_X_list,inv_prior_X),
-      #   times=10
-      # )
-    }
+    SSs <- GridLMM_SS_matrix(Y,chol_Vi,X_cov,X_list,active_X_list,inv_prior_X)
   } else{
-    if(inherits(chol_Vi,'Matrix')) {
-      inv_chol_Vi = solve(chol_Vi)
-    } else {
-      inv_chol_Vi = backsolve(chol_Vi,diag(1,ncol(chol_Vi)))
-    }
-    V_inv = tcrossprod(inv_chol_Vi)
-    # need to adjust downdate_weights by h2s. weight should equal h2/p*, with p* the typical number of markers used to make the down-dated K
-    downdate_weights_i = lapply(seq_len(length(downdate_Xs[[1]])),function(i) {
-      do.call(c,lapply(1:length(h2s),function(j) {
-        if(h2s[j] == 0) return(numeric())
-        pj = ncol(downdate_Xs[[j]][[i]])
-        h2s[j]*rep(1/n_SNPs_downdated_RRM[[j]],pj)
-      }))
-    })
-    n = nrow(Y)
-    downdate_Xs_i = lapply(seq_len(length(downdate_Xs[[1]])),function(i) {
-      do.call(cbind,lapply(1:length(h2s),function(j) {
-        if(h2s[j] == 0) return(matrix(0,n,0))
-        downdate_Xs[[j]][[i]]
-      }))
-    })
-    names(downdate_Xs_i) = names(downdate_Xs[[1]])
-    SSs <- GridLMM_SS_downdate(Y,as.matrix(V_inv), X_cov, X_list,inv_prior_X,downdate_weights_i, downdate_Xs_i,active_X_list, V_log_det)
+    downdate_weights = h2s/unlist(n_SNPs_downdated_RRM)
+    if(length(downdate_weights) != length(downdate_Xs[[1]]$downdate_Xi)) stop("Wrong length of downdate weights")
+    chol_Vi = as.matrix(chol_Vi)
+    SSs <- GridLMM_SS_downdate_matrix(Y,chol_Vi,X_cov,X_list,active_X_list,downdate_Xs,downdate_weights,inv_prior_X);
   }
   log_LL = get_LL(SSs,X_cov,X_list,active_X_list,n,m,ML=TRUE,REML = REML,BF=BF)
   
@@ -532,10 +561,10 @@ calc_LL = function(Y,X_cov,X_list,h2s,chol_Vi,V_log_det,inv_prior_X,downdate_Xs 
                          ML_h2,
                          stringsAsFactors = F)
   if(length(active_X_list) == n_tests) {
-    if(ncol(X_list[[1]]) > 0) {
+    if(length(X_list) > 0) {
       results_i$X_ID = colnames(X_list[[1]])[active_X_list]
     } else {
-      results_i$X_ID = names(downdate_Xs_i)[active_X_list]
+      results_i$X_ID = names(downdate_Xs)[active_X_list]
     }
   } else{
     results_i$X_ID = 'NULL'
@@ -543,7 +572,7 @@ calc_LL = function(Y,X_cov,X_list,h2s,chol_Vi,V_log_det,inv_prior_X,downdate_Xs 
   
   b_cov = ncol(X_cov)
   b_x = length(X_list)
-  if(ncol(X_list[[1]]) == 0) b_x = 0
+  if(length(X_list) == 0) b_x = 0
   b = b_cov + b_x
   # if(ncol(X_list[[1]]) == n_tests) {
   # beta_hats = do.call(rbind,lapply(1:m,function(i) t(log_LL$beta_hat[(i-1)*b + b_cov + 1:b_x,,drop=FALSE])))
@@ -569,27 +598,42 @@ calc_LL = function(Y,X_cov,X_list,h2s,chol_Vi,V_log_det,inv_prior_X,downdate_Xs 
   return(results_i)
 }
 
-calc_LL_parallel = function(Y,X_cov,X_list,h2s,chol_V,V_log_det,inv_prior_X,downdate_Xs = NULL,n_SNPs_downdated_RRM = NULL,REML = TRUE,BF = FALSE,mc.cores = 1,active_X_list = NULL) {
+calc_LL_parallel = function(Y,X_cov,X_list,h2s,chol_V,inv_prior_X,
+                             downdate_Xs = NULL,n_SNPs_downdated_RRM = NULL,REML = TRUE,BF = FALSE,
+                             mc.cores = 1,active_X_list = NULL) {
   
-  if(mc.cores == 1) {
-    return(calc_LL(Y,X_cov,X_list,h2s,chol_V,V_log_det,inv_prior_X,downdate_Xs,n_SNPs_downdated_RRM,REML,BF,active_X_list))
+  if(mc.cores == 1 || length(X_list) == 0) {
+    return(calc_LL(Y,X_cov,X_list,h2s,chol_V,inv_prior_X,downdate_Xs,n_SNPs_downdated_RRM,REML,BF,active_X_list))
   }
-  X_list_names = colnames(X_list[[1]])
-  registerDoParallel(mc.cores)
-  chunkSize = ncol(X_list[[1]])/mc.cores
-  chunks = 1:ncol(X_list[[1]])
-  chunks = split(chunks, ceiling(seq_along(chunks)/chunkSize))
-  X_list_sets = lapply(chunks,function(i) lapply(X_list,function(Xi) Xi[,i,drop=FALSE]))
-  if(!is.null(downdate_Xs)) {
-    downdate_Xs_sets = lapply(chunks,function(i) lapply(downdate_Xs,function(Xs) Xs[i]))
+  # make X_list_active, divide into chunks
+  X_list_active = NULL
+  total_tests = 0
+  if(!is.null(X_list)) {
+    X_list_active = lapply(X_list,function(x) x[,active_X_list,drop=FALSE])
+    total_tests = ncol(X_list_active[[1]])
+    if(!is.null(downdate_Xs) && (total_tests != length(downdate_Xs))) stop("Wrong length of downdate_Xs")
   } else{
-    downdate_Xs_sets = lapply(chunks,function(i) NULL)
+    total_tests = length(downdate_Xs)
   }
-  results = foreach(X_list_i = iter(X_list_sets),downdate_Xs_i = iter(downdate_Xs_sets),.combine = 'rbind') %dopar% {
-    calc_LL(Y,X_cov,X_list_i,h2s,chol_V,V_log_det,inv_prior_X,downdate_Xs_i,n_SNPs_downdated_RRM,REML,BF)
+  # X_list_names = colnames(X_list[[1]])
+  registerDoParallel(mc.cores)
+  chunkSize = total_tests/mc.cores
+  chunks = 1:total_tests
+  chunks = split(chunks, ceiling(seq_along(chunks)/chunkSize))
+  X_list_sets = lapply(chunks,function(i) lapply(X_list_active,function(Xi) Xi[,i,drop=FALSE]))
+  if(!is.null(downdate_Xs)) {
+    downdate_Xs_sets = lapply(chunks,function(i) downdate_Xs[i])
+    results = foreach(X_list_i = iter(X_list_sets),downdate_Xs_i = iter(downdate_Xs_sets),.combine = 'rbind') %dopar% {
+      calc_LL(Y,X_cov,X_list_i,h2s,chol_V,inv_prior_X,downdate_Xs_i,n_SNPs_downdated_RRM,REML,BF)
+    }
+  } else{
+    results = foreach(X_list_i = iter(X_list_sets),.combine = 'rbind') %dopar% {
+      calc_LL(Y,X_cov,X_list_i,h2s,chol_V,inv_prior_X,downdate_Xs,n_SNPs_downdated_RRM,REML,BF)
+    }
   }
   return(results)
 }
+
 
 # takes a list of data.frames of results for the same tests and chooses the best value by ML (and REML), returning a single data.frame of results
 compile_results = function(results_list){
