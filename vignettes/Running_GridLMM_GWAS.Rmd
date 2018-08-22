@@ -139,7 +139,7 @@ data$y = data$y + data$spatial_error #
 The main function for running a GWAS is `GridLMM_GWAS_fast`
 
 ```{r}
-gwas = GridLMM_GWAS_fast(
+gwas = GridLMM_GWAS(
                         formula = y~1 + (1|Geno) + (1|Plot), # the same error model is used for each marker. It is specified similarly to lmer
                         test_formula = ~1, # this is the model for each marker. ~1 means an intercept for the marker. ~1 + cov means an intercept plus a slope on `cov` for each marker
                         reduced_formula = ~0, # This is the null model for each test. ~0 means just the error model. ~1 means the null includes the intercept of the marker, but not anything additional
@@ -147,7 +147,7 @@ gwas = GridLMM_GWAS_fast(
                         weights = NULL, # optional observation-specific weights
                         X = X, # The matrix of markers. Note: This can be of dimension n_g x p, where n_g is the number of unique genotypes.
                         X_ID = 'Geno', # The column of the data that identifies each genotype. Each level of data$Geno should match a rowname of X
-                        h2_start = NULL, # An optional vector of h2s to use as starting values for each random effect in the model. If NULL, will be calculated from the error model using relmatLmer
+                        h2_start = NULL, # An optional vector of h2s to use as starting values for each random effect in the model. If NULL, will be calculated from the error model using GridLMM_ML
                         h2_step = 0.01, # step size per random effect for testing alternate values of h2
                         max_steps = 100, # maximum number of steps of size h2_step to take from h2_start
                         X_map = map, # Optional. The marker positions.
@@ -156,7 +156,7 @@ gwas = GridLMM_GWAS_fast(
                         scaleX = FALSE, # Should the markers be scaled to have constant variance when calculating the GRM?
                         fillNAX = FALSE, # Should missing marker data be filled in with the mean allele frequency?
                         method = 'REML', # REML = Wald test, ML = LRT, BF = calculate Bayes factors
-                        mc.cores = 1, # How many cores should be used for parallel processing. Unless X is large, tends to actually be faster with mc.cores = 1
+                        mc.cores = my_detectCores(), # How many cores should be used for parallel processing. Unless X is large, tends to actually be faster with mc.cores = 1
                         verbose = FALSE # Should progress be printed to the screen?
 )
 ```
@@ -168,7 +168,7 @@ names(gwas)
 
 `setup` is parameters to re-run the model (say with a new X) like this:
 ```{r}
-gwas2 = run_GWAS_fast(X,gwas$setup,h2_step = 0.01,max_steps = 100,method = 'ML',verbose = FALSE)
+# gwas2 = run_GWAS_fast(X,gwas$setup,h2_step = 0.01,max_steps = 100,method = 'ML',verbose = FALSE)
 ```
 
 
@@ -190,7 +190,7 @@ qq(gwas$results$p_value_REML)
 Here's the same data run with only the GRM as a random effect
 
 ```{r}
-gwas1 = GridLMM_GWAS_fast(
+gwas1 = GridLMM_GWAS(
                         formula = y~1 + (1|Geno), # the same error model is used for each marker. It is specified similarly to lmer
                         test_formula = ~1, # this is the model for each marker. ~1 means an intercept for the marker. ~1 + cov means an intercept plus a slope on `cov` for each marker
                         reduced_formula = ~0, # This is the null model for each test. ~0 means just the error model. ~1 means the null includes the intercept of the marker, but not anything additional
@@ -198,7 +198,7 @@ gwas1 = GridLMM_GWAS_fast(
                         weights = NULL, # optional observation-specific weights
                         X = X, # The matrix of markers. Note: This can be of dimension n_g x p, where n_g is the number of unique genotypes.
                         X_ID = 'Geno', # The column of the data that identifies each genotype. Each level of data$Geno should match a rowname of X
-                        h2_start = NULL, # An optional vector of h2s to use as starting values for each random effect in the model. If NULL, will be calculated from the error model using relmatLmer
+                        h2_start = NULL, # An optional vector of h2s to use as starting values for each random effect in the model. If NULL, will be calculated from the error model using GridLMM_ML
                         h2_step = 0.01, # step size per random effect for testing alternate values of h2
                         max_steps = 100, # maximum number of steps of size h2_step to take from h2_start
                         X_map = map, # Optional. The marker positions.
@@ -207,7 +207,7 @@ gwas1 = GridLMM_GWAS_fast(
                         scaleX = FALSE, # Should the markers be scaled to have constant variance when calculating the GRM?
                         fillNAX = FALSE, # Should missing marker data be filled in with the mean allele frequency?
                         method = 'REML', # Should the best model be selected by REML (if False, will be selected by ML)
-                        mc.cores = 1, # How many cores should be used for parallel processing. Unless X is large, tends to actually be faster with mc.cores = 1
+                        mc.cores = my_detectCores(), # How many cores should be used for parallel processing. Unless X is large, tends to actually be faster with mc.cores = 1
                         verbose = FALSE # Should progress be printed to the screen?
 )
 ```
@@ -228,7 +228,7 @@ that suggested that just as you correct for genetic background with K = X %*% t(
 # add a random environmental vector to data
 data$env = rnorm(nrow(data))
 
-gxe_gwas = GridLMM_GWAS_fast(
+gxe_gwas = GridLMM_GWAS(
                         formula = y~1 + env + (1 + env|Geno), # the same error model is used for each marker. It is specified similarly to lmer
                         test_formula = ~1 + env, # this is the model for each marker. ~1 means an intercept for the marker. ~1 + cov means an intercept plus a slope on `cov` for each marker
                         reduced_formula = ~1, # This is the null model for each test. ~0 means just the error model. ~1 means the null includes the intercept of the marker, but not anything additional
@@ -236,7 +236,7 @@ gxe_gwas = GridLMM_GWAS_fast(
                         weights = NULL, # optional observation-specific weights
                         X = X, # The matrix of markers. Note: This can be of dimension n_g x p, where n_g is the number of unique genotypes.
                         X_ID = 'Geno', # The column of the data that identifies each genotype. Each level of data$Geno should match a rowname of X
-                        h2_start = NULL, # An optional vector of h2s to use as starting values for each random effect in the model. If NULL, will be calculated from the error model using relmatLmer
+                        h2_start = NULL, # An optional vector of h2s to use as starting values for each random effect in the model. If NULL, will be calculated from the error model using GridLMM_ML
                         h2_step = 0.01, # step size per random effect for testing alternate values of h2
                         max_steps = 100, # maximum number of steps of size h2_step to take from h2_start
                         X_map = map, # Optional. The marker positions.
@@ -245,7 +245,7 @@ gxe_gwas = GridLMM_GWAS_fast(
                         scaleX = FALSE, # Should the markers be scaled to have constant variance when calculating the GRM?
                         fillNAX = FALSE, # Should missing marker data be filled in with the mean allele frequency?
                         method = 'REML', # Should the best model be selected by REML (if False, will be selected by ML)
-                        mc.cores = 1, # How many cores should be used for parallel processing. Unless X is large, tends to actually be faster with mc.cores = 1
+                        mc.cores = my_detectCores(), # How many cores should be used for parallel processing. Unless X is large, tends to actually be faster with mc.cores = 1
                         verbose = FALSE # Should progress be printed to the screen?
 )
 ```
@@ -330,7 +330,7 @@ full_results = foreach(chunk = chunks,i = 1:length(chunks),.combine = 'rbind') %
   X_chunk = read.plink('test_data',select.snps = chunk)
   X_chunk = as(X_chunk$genotypes,'numeric') # convert to numeric matrix
   # Run the GWAS for the chunk
-  results_chunk = GridLMM_GWAS_fast(formula = y~1 + (1|Geno) + (1|Plot),
+  results_chunk = GridLMM_GWAS(formula = y~1 + (1|Geno) + (1|Plot),
                                     test_formula = ~1,
                                     reduced_formula = ~0,
                                     data = data,

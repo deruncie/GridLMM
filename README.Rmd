@@ -24,8 +24,9 @@ devtools::install_github('deruncie/GridLMM')
 - `GridLMM_ML`: estimates parameters of a LMM by (restricted) Maximum Likelihood
 - `GridLMM_posterior`: Approximates the posterior distribution of the variance component
 proportions of a LMM
-- `GridLMM_GWAS_fast`: Runs a GWAS with the error structure a LMM. Uses heuristics to efficiently sample the grid. Can run Wald tests (`method = 'REML'`), Likelihood ratio tests (`method = 'ML'`), or calculate Bayes Factors (`method = 'BF'`)
-- `GridLMM_GWAS`: Runs a GWAS as above, but with a complete grid
+- `GridLMM_GWAS`: Runs a GWAS with the error structure a LMM. 
+By default, uses heuristics to efficiently sample the grid. 
+Can run Wald tests (`method = 'REML'`), Likelihood ratio tests (`method = 'ML'`), or calculate Bayes Factors (`method = 'BF'`)
 - `GridLMMnet`: Fit a multiple regression with LASSO / elastic net penalty and mixed model error term.
 
 ### Examples:

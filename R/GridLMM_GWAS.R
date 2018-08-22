@@ -245,7 +245,7 @@ GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,weights = NULL
   )
   
   
-  results = run_GridLMM_GWAS(Y,X_cov,X_list_full, X_list_reduced,inv_prior_X,V_setup,h2_start,h2_step,target_prob,proximal_markers, proximal_Xs, method,mc.cores,verbose)
+  results = run_GridLMM_GWAS(Y,X_cov,X_list_full, X_list_reduced,inv_prior_X,X_map,V_setup,h2_start,h2_step,target_prob,proximal_markers, proximal_Xs, method,mc.cores,verbose)
   
   return(list(
     results = results,
@@ -254,7 +254,7 @@ GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,weights = NULL
 }
 
 
-run_GridLMM_GWAS = function(Y,X_cov,X_list_full, X_list_reduced = NULL,inv_prior_X = NULL,V_setup,h2_start=NULL,h2_step,target_prob = 0.99,proximal_markers=NULL, proximal_Xs=NULL, 
+run_GridLMM_GWAS = function(Y,X_cov,X_list_full, X_list_reduced = NULL,inv_prior_X = NULL,X_map = NULL, V_setup,h2_start=NULL,h2_step,target_prob = 0.99,proximal_markers=NULL, proximal_Xs=NULL, 
                              method = c('REML','ML','BF'), mc.cores=my_detectCores(),verbose = FALSE)
 {
   
@@ -364,6 +364,14 @@ run_GridLMM_GWAS = function(Y,X_cov,X_list_full, X_list_reduced = NULL,inv_prior
   }
   results$ML_index = c()
   results$REML_index = c()
+  
+  # add map info
+  if(!is.null(X_map)){
+    index = match(results$X_ID,X_map$snp)
+    if(!is.null(index) && length(index) == nrow(results)) {
+      results = data.frame(X_map[index,],results)
+    }
+  }
   
   return(results)
 }
