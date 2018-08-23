@@ -1,5 +1,6 @@
 prepMM = function(formula,data,weights = NULL,other_formulas = NULL,
-                  relmat = NULL, X = NULL, X_ID = 'ID',proximal_markers = NULL,
+                  relmat = NULL, X = NULL, X_ID = 'ID',proximal_markers = NULL,V_setup = NULL,
+                  diagonalize = TRUE,svd_K = TRUE,drop0_tol = 1e-10,save_V_folder = NULL,
                   verbose = TRUE) {
   
   # ensure data has rownames
@@ -52,88 +53,88 @@ prepMM = function(formula,data,weights = NULL,other_formulas = NULL,
   
   # if(!is.null(X_ID) && !X_ID %in% names(RE_terms$cnms)) warning(sprintf("No covariance given SNPs specified in error formula. To specify, add a term like (1|%s)",X_ID))
   
-  # construct the RE_setup list
-  # contains:
-  # Z: n x r design matrix
-  # K: r x r PSD covariance matrix
-  RE_setup = list()
-  for(i in 1:length(RE_terms$cnms)){
-    term = names(RE_terms$cnms)[i]
-    n_factors = length(RE_terms$cnms[[i]])  # number of factors for this grouping factor
-    
-    # extract combined Z matrix
-    combined_Zt = RE_terms$Ztlist[[i]]
-    Zs_term = tapply(1:nrow(combined_Zt),gl(n_factors,1,nrow(combined_Zt),labels = RE_terms$cnms[[i]]),function(x) Matrix::t(combined_Zt[x,,drop=FALSE]))
-    
-    # extract K from relmat. If missing, assign to NULL
-    K = NULL
-    p = NULL
-    p_test = NULL
-    if(!is.null(X_ID) && term == X_ID){
-      if(term %in% names(relmat)){
-        if(verbose) print('using provided RRM.')
+  if(is.null(V_setup)) {
+    # construct the RE_setup list
+    # contains:
+    # Z: n x r design matrix
+    # K: r x r PSD covariance matrix
+    RE_setup = list()
+    for(i in 1:length(RE_terms$cnms)){
+      term = names(RE_terms$cnms)[i]
+      n_factors = length(RE_terms$cnms[[i]])  # number of factors for this grouping factor
+      
+      # extract combined Z matrix
+      combined_Zt = RE_terms$Ztlist[[i]]
+      Zs_term = tapply(1:nrow(combined_Zt),gl(n_factors,1,nrow(combined_Zt),labels = RE_terms$cnms[[i]]),function(x) Matrix::t(combined_Zt[x,,drop=FALSE]))
+      
+      # extract K from relmat. If missing, assign to NULL
+      K = NULL
+      p = NULL
+      p_test = NULL
+      if(term %in% names(relmat)) {
         if(is.list(relmat[[term]])){
           if(verbose && !is.null(proximal_markers)) print('Note: X should be centered and scaled as it was for calculating RRM')
           K = relmat[[term]]$K
-          if(!is.null(relmat[[term]]$p)){
-            p = relmat[[term]]$p
-          }
+          p = relmat[[term]]$p
+          p_test = relmat[[term]]$p_test
         } else{
           K = relmat[[term]]
         }
-      } else{
+      } else if(!is.null(X_ID) && term == X_ID && !is.null(X)) {
         if(verbose) print('making RRM matrix')
         p = ncol(X)
         K = tcrossprod(X)/p
         relmat[[term]] = K
-      }
-      if(!is.null(proximal_markers)) {
+      } 
+      
+      if(term == X_ID && !is.null(proximal_markers) && is.null(p_test)){
         p_test = mean(lengths(proximal_markers))
       }
-    } else if(term %in% names(relmat)){
-      K = relmat[[term]]
-    } 
-    
-    if(!is.null(K)) {
-      if(!all(colnames(Zs_term[[1]]) %in% rownames(K))) stop('rownames of K not lining up with Z')
-      K = K[colnames(Zs_term[[1]]),colnames(Zs_term[[1]])]
-    } else {
-      K = Diagonal(ncol(Zs_term[[1]]),1)
-      rownames(K) = colnames(K) = colnames(Zs_term[[1]])
-    }
-    
-    
-    # make an entry in RE_setup for each random effect
-    for(j in 1:n_factors){
-      # name of variance component
-      name = term
-      if(n_factors > 1) name = paste(name,RE_terms$cnms[[i]][[j]],sep='.')
-      while(name %in% names(RE_setup)) name = paste0(name,'.1') # hack for when same RE used multiple times
       
-      # Z matrix
-      Z = as(Zs_term[[j]],'dgCMatrix')
-      
-      
-      RE_setup[[name]] = list(
-        term = term,
-        Z = Z,
-        K = K,
-        p = p,
-        p_test = p_test
-      )
-    }
-    
-    # add names to RE_setup if needed
-    n_RE = length(RE_setup)
-    for(i in 1:n_RE){
-      if(is.null(names(RE_setup)[i]) || names(RE_setup)[i] == ''){
-        names(RE_setup)[i] = paste0('RE.',i)
+      if(!is.null(K)) {
+        if(!all(colnames(Zs_term[[1]]) %in% rownames(K))) stop('rownames of K not lining up with Z')
+        K = K[colnames(Zs_term[[1]]),colnames(Zs_term[[1]])]
+      } else {
+        K = Diagonal(ncol(Zs_term[[1]]),1)
+        rownames(K) = colnames(K) = colnames(Zs_term[[1]])
       }
-    }
-    
+      
+      
+      # make an entry in RE_setup for each random effect
+      for(j in 1:n_factors){
+        # name of variance component
+        name = term
+        if(n_factors > 1) name = paste(name,RE_terms$cnms[[i]][[j]],sep='.')
+        while(name %in% names(RE_setup)) name = paste0(name,'.1') # hack for when same RE used multiple times
+        
+        # Z matrix
+        Z = as(Zs_term[[j]],'dgCMatrix')
+        
+        
+        RE_setup[[name]] = list(
+          term = term,
+          Z = Z,
+          K = K,
+          p = p,
+          p_test = p_test
+        )
+      }
+      
+      # add names to RE_setup if needed
+      n_RE = length(RE_setup)
+      for(i in 1:n_RE){
+        if(is.null(names(RE_setup)[i]) || names(RE_setup)[i] == ''){
+          names(RE_setup)[i] = paste0('RE.',i)
+        }
+      }
+      
+    }  
+    V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K = TRUE,drop0_tol = 1e-10,save_V_folder,verbose)
+  } else{
+    RE_setup = V_setup$RE_setup
   }
   
-  return(list(lmod = lmod, RE_setup = RE_setup))
+  return(list(lmod = lmod, RE_setup = RE_setup, V_setup = V_setup))
 }
 
 make_V_setup = function(RE_setup,
@@ -197,17 +198,22 @@ make_V_setup = function(RE_setup,
       Qt = t(Q_ZU %*% RKRt_U)
     } else{
       ZKZt = Z %*% RE_setup[[1]]$K %*% t(Z)
-      result = svd(ZKZt)
+      if(inherits(ZKZt,'Matrix') && length(ZKZt@x) > ncol(ZKZt)^2/2) ZKZt = as.matrix(ZKZt)
+      if(inherits(ZKZt,'Matrix')) {
+        result = svd(ZKZt)
+      } else{
+        result = svd_c(ZKZt)
+      }
       Qt = t(result$u)
     }
-    Qt = as(drop0(as(Qt,'dgCMatrix'),tol = drop0_tol),'dgCMatrix')
+    # Qt = as(drop0(as(Qt,'dgCMatrix'),tol = drop0_tol),'dgCMatrix')
     QtZ_matrices = lapply(RE_setup,function(re) Qt %*% re$Z)
   } else{
     Qt = NULL
     QtZ_matrices = lapply(RE_setup,function(re) re$Z)
   }
   QtZ = do.call(cbind,QtZ_matrices[RE_names])
-  QtZ = as(QtZ,'dgCMatrix')
+  # QtZ = as(QtZ,'dgCMatrix')
   
   # ------------------------------------ #
   # ---- Calculate ZKZts --------------- #
@@ -216,27 +222,8 @@ make_V_setup = function(RE_setup,
   for(re in RE_names) {
     # ZKZts[[re]] = as(forceSymmetric(drop0(QtZ_matrices[[re]] %*% RE_setup[[re]]$K %*% t(QtZ_matrices[[re]]),tol = drop0_tol)),'dgCMatrix')
     # ZKZts[[re]] = forceSymmetric(drop0(QtZ_matrices[[re]] %*% RE_setup[[re]]$K %*% t(QtZ_matrices[[re]]),tol = drop0_tol))
-    ZKZts[[re]] = as.matrix(forceSymmetric(drop0(QtZ_matrices[[re]] %*% RE_setup[[re]]$K %*% t(QtZ_matrices[[re]]),tol = drop0_tol)))
-  }
-  
-  
-  # ------------------------------------ #
-  # ---- Prep for downdating ----------- #
-  # ------------------------------------ #
-  # in preparation for down-dating, multiply each ZKZt by p/(p-pj), where p is the number of SNPs that went into the RRM, and pj is the (mean) number of SNPs per down-date operation
-  n_SNPs_downdated_RRM = lapply(RE_setup,function(x) {
-    if(!is.null(x$p) && !is.null(x$p_test)) return(x$p - x$p_test)
-    return(0)
-  })
-  downdate_ratios = c()
-  for(re in RE_names) {
-    if(is.null(RE_setup[[re]]$p)) {
-      downdate_ratios[re] = 1
-    } else if(is.null(RE_setup[[re]]$p_test)){
-      downdate_ratios[re] = RE_setup[[re]]$p/(RE_setup[[re]]$p - 1) # assume p_test == 1 if not provided
-    } else{
-      downdate_ratios[re] = RE_setup[[re]]$p/(RE_setup[[re]]$p - RE_setup[[re]]$p_test) 
-    }
+    # ZKZts[[re]] = as.matrix(forceSymmetric(drop0(QtZ_matrices[[re]] %*% RE_setup[[re]]$K %*% t(QtZ_matrices[[re]]),tol = drop0_tol)))
+    ZKZts[[re]] = QtZ_matrices[[re]] %*% RE_setup[[re]]$K %*% t(QtZ_matrices[[re]])
   }
   
   
@@ -245,8 +232,6 @@ make_V_setup = function(RE_setup,
   # ------------------------------------ #
   setup = list(
     RE_setup = RE_setup,
-    downdate_ratios = downdate_ratios,
-    n_SNPs_downdated_RRM = n_SNPs_downdated_RRM,
     Qt = Qt,
     ZKZts = ZKZts,
     resid_V = diag(1/weights),
@@ -254,8 +239,21 @@ make_V_setup = function(RE_setup,
   )
   
   # ------------------------------------ #
+  # ---- Prep for downdating ----------- #
+  # ------------------------------------ #
+  setup = set_p_test(setup)
+  
+  # ------------------------------------ #
   # ---- Prep folder to save V files --- #
   # ------------------------------------ #
+  clean_V_folder(setup)
+  
+  return(setup)
+}
+
+clean_V_folder = function(V_setup) {
+  save_V_folder = V_setup$save_V_folder
+  RE_names = names(V_setup$RE_setup)
   if(!is.null(save_V_folder) & is.character(save_V_folder)){
     try(dir.create(save_V_folder,showWarnings = FALSE),silent = TRUE)
     # clean up existing files
@@ -264,10 +262,57 @@ make_V_setup = function(RE_setup,
     # prepare index file
     chol_V_index = setNames(data.frame(matrix(ncol = 1+length(RE_names),nrow = 0)),c('file',RE_names))
     write.csv(chol_V_index,file = sprintf('%s/chol_V_index.csv',save_V_folder),row.names=FALSE)
-    saveRDS(setup,file = sprintf('%s/chol_V_setup.rds',save_V_folder))
+    saveRDS(V_setup,file = sprintf('%s/chol_V_setup.rds',save_V_folder))
   }
+}
+
+#' Set the number of markers used in a GRM
+#'
+#' For GRMs created as X'X, it can be useful to remove "proximal" markers from the GRM when testing a focal marker.
+#' To do this in GridLMM, we need to know \code{p} (how many markers were in the original GRM), and \code{p_test},
+#' how many markers are to be \strong{removed} for a typical test
+#'
+#' @param V_setup A list of setup variables, as returned by a GridLMM function
+#' @param p_test A named vector with names corresponding to random effects in the model (as found in \code{V_setup$RE_setup}), 
+#'    and values equal to the typical number of markers to be \strong{removed} for a typical test
+#' @param p A named vector as for \code{p_test} giving the total number of markers used to create the original GRM
+#'
+#' @return The modified \code{V_setup} list
+#' @export
+set_p_test = function(V_setup,p_test = NULL, p = NULL){
+  RE_setup = V_setup$RE_setup
+  if(!is.null(p)) {
+    for(re in names(p)){
+      if(!re %in% names(RE_setup)) stop(sprintf('Random effect %s not in V_setup',re))
+      RE_setup[[re]]$p = p[[re]]
+    }
+  }
+  if(!is.null(p_test)) {
+    for(re in names(p_test)){
+      RE_setup[[re]]$p_test = p_test[[re]]
+    }
+  }
+  # in preparation for down-dating, multiply each ZKZt by p/(p-pj), where p is the number of SNPs that went into the RRM, and pj is the (mean) number of SNPs per down-date operation
+  downdate_ratios = c()
+  n_SNPs_downdated_RRM = c()
+  for(re in names(RE_setup)) {
+    if(is.null(RE_setup[[re]]$p)) {
+      downdate_ratios[re] = 1
+      n_SNPs_downdated_RRM[re] = 0
+    } else {
+      if(is.null(RE_setup[[re]]$p_test)) RE_setup[[re]]$p_test = 0 # assume p_test == 0 if not provided
+      n_SNPs_downdated_RRM[re] = RE_setup[[re]]$p - RE_setup[[re]]$p_test
+      downdate_ratios[re] = RE_setup[[re]]$p/n_SNPs_downdated_RRM[re]
+    }
+  }
+  V_setup$RE_setup = RE_setup
+  V_setup$n_SNPs_downdated_RRM = n_SNPs_downdated_RRM
+  V_setup$downdate_ratios = downdate_ratios
   
-  return(setup)
+  # after re-setting p-test, all previously calculated chol_Vi's need to be cleared.
+  clean_V_folder(V_setup) 
+  
+  return(V_setup)
 }
 
 
@@ -522,7 +567,8 @@ get_LL = function(SSs,X_cov,X_list,active_X_list,n,m,ML,REML,BF){
 
 calc_LL = function(Y,X_cov,X_list,h2s,chol_Vi,inv_prior_X,
                     downdate_Xs = NULL,n_SNPs_downdated_RRM = NULL,REML = TRUE, BF = TRUE,active_X_list = NULL){  
-  if(is.null(active_X_list)) {
+  
+    if(is.null(active_X_list)) {
     if(!is.null(downdate_Xs)) {
       active_X_list = 1:length(downdate_Xs)
     } else if(length(X_list) == 0) {
@@ -537,7 +583,7 @@ calc_LL = function(Y,X_cov,X_list,h2s,chol_Vi,inv_prior_X,
     SSs <- GridLMM_SS_matrix(Y,chol_Vi,X_cov,X_list,active_X_list,inv_prior_X)
   } else{
     downdate_weights = h2s/unlist(n_SNPs_downdated_RRM)
-    if(length(downdate_weights) != length(downdate_Xs[[1]]$downdate_Xi)) stop("Wrong length of downdate weights")
+    if(length(downdate_weights) != length(downdate_Xs[[active_X_list[[1]]]]$downdate_Xi)) stop("Wrong length of downdate weights")
     chol_Vi = as.matrix(chol_Vi)
     SSs <- GridLMM_SS_downdate_matrix(Y,chol_Vi,X_cov,X_list,active_X_list,downdate_Xs,downdate_weights,inv_prior_X);
   }
@@ -607,22 +653,23 @@ calc_LL_parallel = function(Y,X_cov,X_list,h2s,chol_V,inv_prior_X,
   }
   # make X_list_active, divide into chunks
   X_list_active = NULL
-  total_tests = 0
+  downdate_Xs_active = NULL
+  total_tests = length(active_X_list)
   if(!is.null(X_list)) {
     X_list_active = lapply(X_list,function(x) x[,active_X_list,drop=FALSE])
-    total_tests = ncol(X_list_active[[1]])
-    if(!is.null(downdate_Xs) && (total_tests != length(downdate_Xs))) stop("Wrong length of downdate_Xs")
-  } else{
-    total_tests = length(downdate_Xs)
   }
+  if(!is.null(downdate_Xs)) {
+    downdate_Xs_active = downdate_Xs[active_X_list]
+  }
+  
   # X_list_names = colnames(X_list[[1]])
   registerDoParallel(mc.cores)
   chunkSize = total_tests/mc.cores
   chunks = 1:total_tests
   chunks = split(chunks, ceiling(seq_along(chunks)/chunkSize))
   X_list_sets = lapply(chunks,function(i) lapply(X_list_active,function(Xi) Xi[,i,drop=FALSE]))
-  if(!is.null(downdate_Xs)) {
-    downdate_Xs_sets = lapply(chunks,function(i) downdate_Xs[i])
+  if(!is.null(downdate_Xs_active)) {
+    downdate_Xs_sets = lapply(chunks,function(i) downdate_Xs_active[i])
     results = foreach(X_list_i = iter(X_list_sets),downdate_Xs_i = iter(downdate_Xs_sets),.combine = 'rbind') %dopar% {
       calc_LL(Y,X_cov,X_list_i,h2s,chol_V,inv_prior_X,downdate_Xs_i,n_SNPs_downdated_RRM,REML,BF)
     }
@@ -781,4 +828,31 @@ get_h2_LDAK = function(y,X_cov,K_list,LDAK_program,weights = rep(1,length(K_list
   colnames(h2_LDAK) = names(K_list)
   rownames(h2_LDAK) = NULL
   h2_LDAK
+}
+
+
+qq_p_plot = function(ps,...){
+  if(is.list(ps)) {
+    ps_list = lapply(ps,function(x) {
+      list(ps = -sort(log10(x)), us = -log10(qunif(ppoints(length(x)))))
+    })
+    names(ps_list) = names(ps)
+    max_p = max(sapply(ps_list,function(x) x$ps[1]))
+    max_u = max(sapply(ps_list,function(x) x$us[1]))
+    ylim = c(0,max_p)
+    xlim = c(0,max_u)
+    plot(NA,NA,xlim = xlim,ylim = ylim,xlab = 'Expected -log10(p)',ylab = 'Observed -log10(p)',...)
+    abline(0,1)
+    for(i in 1:length(ps_list)){
+      points(ps_list[[i]]$us,ps_list[[i]]$ps,pch=19,cex=.5,col=i)
+    }
+    if(!is.null(names(ps))[1]) {
+      legend('topleft',legend = names(ps_list),col = 1:length(ps_list),pch=19)
+    }
+  } else{
+    ps = sort(ps)
+    u = sort(runif(length(ps)))
+    plot(-log10(u),-log10(ps),xlab = 'Expected',ylab = 'Observed',...)
+    abline(0,1)
+  }
 }

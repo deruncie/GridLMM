@@ -2,7 +2,7 @@ library(GridLMM)
 
 set.seed(1)
 # simulation with 1 RE, n=100
-n = 200
+n = 1000
 nG = 50
 data = data.frame(Group = factor(rep(1:nG,each = n/nG)),cov = sample(c(-1,1),n,replace=T)) # cov is a covariate for all tests
 p = 1000
@@ -10,66 +10,69 @@ Z = model.matrix(~0+Group,data)
 K = Z %*% t(Z)
 
 Xg = matrix(sample(c(0,1),nG*p,replace=T),nrow = nG)
-Xg[,4:6] = Xg[,1:3]
+# Xg[,4:6] = Xg[,1:3]
 rownames(Xg) = 1:nG
 X = Z %*% Xg
-# X = matrix(sample(c(0,1),n*p,replace=T),nrow = n)
+X = matrix(sample(c(0,2),n*p,replace=T),nrow = n)
 X = sweep(X,2,colMeans(X),'-')
 data$ID = factor(1:nrow(data))
 rownames(X) = data$ID
-# K = X %*% t(X) / p
+K = X %*% t(X) / p
 rownames(K) = colnames(K) = data$ID
 
-h2 = 0.5
-prop_X = 0.5
+X1 = X
+X = matrix(sample(c(0,1),n*p,replace=T),nrow = n)
+X = sweep(X,2,colMeans(X),'-')
+rownames(X) = data$ID
 
-beta = c(1,1,0,rep(0,p-3))  # first SNP is real
+h2 = 0.5
+prop_X = 0.1
+cV = chol(h2*K + (1-h2)*diag(1,n)) # This K doesn't not include the testing X
+K = K/2 + 1/2*X %*% t(X) / p # This K does include the testing X
+
+beta = 1*c(1,0,0,rep(0,p-3))  # first SNP is real
 beta_cov = 0
 beta_gxe = c(1,0,1,rep(0,p-3))
 
-g = X %*% beta + data$cov*(X %*% beta_gxe);g=g/sd(g)
-e = sqrt(h2)* Z %*% rnorm(nG) + sqrt(1-h2)*rnorm(n);e=e/sd(e)
+g = X %*% beta + data$cov*(X %*% beta_gxe);g=g/sd(g)*1
+e = t(cV) %*% rnorm(n);e=e/sd(e)
 y = data$cov * beta_cov + sqrt(prop_X) * c(g) + sqrt(1-prop_X) * e
 y = y/sd(y)
 data$y = y
 
 
-
-
-
-# Run GxEMMA_GWAS
-
-prop_X= 0.5
-beta = c(1,1,0,rep(0,p-3))  # first SNP is real
-beta_cov = 0
-beta_gxe = 0*c(1,0,1,rep(0,p-3))
-
-g = X %*% beta + data$cov*(X %*% beta_gxe);g=g/sd(g)
-e = sqrt(h2)* Z %*% rnorm(nG) + sqrt(1-h2)*rnorm(n);e=e/sd(e)
-y = data$cov * beta_cov + sqrt(prop_X) * c(g) + sqrt(1-prop_X) * e
-y = y/sd(y)
-data$y = y
-
-g0 = GridLMM_ML(y~cov+(1|Group)+(0+cov|Group),data,relmat = list(Group = tcrossprod(scale_SNPs(Xg[,1:50],scaleX = F))/50))
+g0 = GridLMM_ML(y~cov+(1|Group),data,relmat = list(Group = tcrossprod(scale_SNPs(Xg,scaleX = F))/p))
 g0$results
-g1 = GridLMM_GWAS(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',
+g0 = GridLMM_ML(y~cov+(1|ID),data,relmat = list(ID = K))
+g0$results
+
+g1 = GridLMM_GWAS(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg,X_ID = 'Group',
                   # h2_start = c(0.9,0.1),
                   algorithm = 'Full',
                   h2_step = 0.1, save_V_folder = 'V_folder',mc.cores=1)
-proximal_markers = lapply(1:50,function(x) seq(max(1,x-3),min(50,x+3)))
-g2 = GridLMM_GWAS(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_step = 0.1,mc.cores=1,algorithm = 'Full',
+proximal_markers = lapply(1:p,function(x) seq(max(1,x-10),min(p,x+10)))
+proximal_markers[-c(1:2)] = lapply(proximal_markers[-c(1:2)],function(x) x[x>2])
+g2 = GridLMM_GWAS(y~cov + (1|Group),~1,~0,data = data,X = Xg,X_ID = 'Group',h2_step = 0.1,mc.cores=1,algorithm = 'Full',
                   proximal_markers = proximal_markers)
-g2b = GridLMM_GWAS(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',proximal_markers = proximal_markers, 
+g2b = GridLMM_GWAS(y~cov + (1|Group),~1,~0,data = data,X = Xg,X_ID = 'Group',proximal_markers = proximal_markers, 
                    V_setup = g2$setup$V_setup)
 head(g1$results)
 head(g2$results)
 head(g2b$results)
 
-g3 = GridLMM_GWAS(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_step = 0.01,mc.cores=1,algorithm = 'Fast')
-g4 = GridLMM_GWAS(y~cov + (1|Group),~1,~0,data = data,X = Xg[,1:50],X_ID = 'Group',h2_step = 0.01,mc.cores=1,algorithm = 'Fast'
-                  ,proximal_markers = proximal_markers)
+g3 = GridLMM_GWAS(y~cov + (1|ID),~1,~0,data = data,X = X,X_ID = 'ID',h2_step = 0.01,mc.cores=1,algorithm = 'Fast',
+                  method='ML',centerX=T,relmat = list(ID = K))
+g4 = GridLMM_GWAS(y~cov + (1|ID),~1,~0,data = data,X = X,X_ID = 'ID',h2_step = 0.01,mc.cores=1,algorithm = 'Fast',
+                  centerX = T,relmat = list(ID = list(K=K,p=2*p)),#h2_start = c(ID = 0.43)
+                  proximal_markers = proximal_markers,diagonalize = F,method='ML')
+# qq_p_plot(g4$results$p_value_REML)
+qq_p_plot(list(g3=g3$results$p_value_ML,g4=g4$results$p_value_ML))
 head(g3$results)
 head(g4$results)
+
+plot(-log10(g4$results$p_value_ML))
+plot(-log10(g1$results$p_value_RML))
+
 
 # Run GxEMMAnet
 library(glmnet)

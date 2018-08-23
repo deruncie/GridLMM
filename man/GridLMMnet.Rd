@@ -5,7 +5,7 @@
 \title{LASSO solutions in a linear mixed model using GridLMM}
 \usage{
 GridLMMnet(formula, data, X, X_ID = "ID", weights = NULL, centerX = TRUE,
-  scaleX = TRUE, relmat = NULL, h2_divisions = 10, h2_start = NULL,
+  scaleX = TRUE, relmat = NULL, h2_step = 0.1, h2_start = NULL,
   alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs < nvars, 0.01,
   1e-04), lambda = NULL, nfolds = NULL, foldid = NULL, RE_setup = NULL,
   V_setup = NULL, save_V_folder = NULL, diagonalize = T,
@@ -37,6 +37,8 @@ It is possible that multiple observations reference the same row of \code{X}.}
     used to estimate the covariance matrix. This is used for appropriate downdating of \code{V} to remove proximal markers for each test.
 The names of the matrices / list elements should correspond to the columns in \code{data} that are used as grouping factors. All levels
 of the grouping factor should appear as rownames of the corresponding matrix.}
+
+\item{h2_step}{Step size of the grid}
 
 \item{h2_start}{Optional. Matrix with each row a vector of \eqn{h^2} parameters defining starting values for the grid. 
 Typically ML/REML solutions for the null model. 

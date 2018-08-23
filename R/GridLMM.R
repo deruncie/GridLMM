@@ -67,17 +67,13 @@ GridLMM_posterior = function(formula,data,weights = NULL,relmat = NULL,
                   target_prob = 0.99, # want this much probability to be distributed over at least thresh_nonzero grid squares 
                   thresh_nonzero = 10, thresh_nonzero_marginal = 0,
                   V_setup = NULL, save_V_folder = NULL, # character vector giving folder name to save V_list
-                  diagonalize=T,svd_K = T,drop0_tol = 1e-10,mc.cores = my_detectCores(),verbose=T) {
+                  diagonalize=T,mc.cores = my_detectCores(),verbose=T) {
  
   MM = prepMM(formula,data,weights,other_formulas = NULL,
-              relmat,X=NULL,X_ID=NULL,proximal_markers=NULL,verbose)
+              relmat,X=NULL,X_ID=NULL,proximal_markers=NULL,V_setup,diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
   lmod = MM$lmod
   RE_setup = MM$RE_setup
-  
-  # -------- prep V_setup ---------- #
-  if(is.null(V_setup)) {
-    V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K = TRUE,drop0_tol = 1e-10,save_V_folder,verbose)
-  } 
+  V_setup = MM$V_setup
   
   Y = matrix(lmod$fr[,1])
   colnames(Y) = 'y'
@@ -236,18 +232,13 @@ GridLMM_posterior = function(formula,data,weights = NULL,relmat = NULL,
 GridLMM_ML = function(formula,data,weights = NULL,relmat = NULL,  
                      initial_step = 0.5,tolerance = 0.01,ML = T,REML=T,
                      V_setup = NULL, save_V_folder = NULL, # character vector giving folder name to save V_list
-                     diagonalize=T,svd_K = T,drop0_tol = 1e-10,mc.cores = my_detectCores(),verbose=T) {
-  
+                     diagonalize=T,mc.cores = my_detectCores(),verbose=T) {
  
   MM = prepMM(formula,data,weights,other_formulas = NULL,
-              relmat,X=NULL,X_ID=NULL,proximal_markers=NULL,verbose)
+              relmat,X=NULL,X_ID=NULL,proximal_markers=NULL,V_setup,diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
   lmod = MM$lmod
   RE_setup = MM$RE_setup
-  
-  # -------- prep V_setup ---------- #
-  if(is.null(V_setup)) {
-    V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K = TRUE,drop0_tol = 1e-10,save_V_folder,verbose)
-  } 
+  V_setup = MM$V_setup
   
   Y = matrix(lmod$fr[,1])
   colnames(Y) = 'y'

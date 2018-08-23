@@ -113,9 +113,10 @@ GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,weights = NULL
   
   # -------- prep Mixed Models ---------- #
   MM = prepMM(formula,data,weights,other_formulas = list(test_formula,reduced_formula),
-              relmat,X,X_ID,proximal_markers,verbose)
+              relmat,X,X_ID,proximal_markers,V_setup,diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
   lmod = MM$lmod
   RE_setup = MM$RE_setup
+  V_setup = MM$V_setup
   
   Y = matrix(lmod$fr[,1])
   colnames(Y) = 'y'
@@ -186,11 +187,6 @@ GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,weights = NULL
   }
   rm(X)
   
-  # -------- prep V_setup ---------- #
-  if(is.null(V_setup)) {
-    V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K = TRUE,drop0_tol = 1e-10,save_V_folder,verbose)
-  } 
-  
   # -------- set up prior for X ------ #
   if(method == 'BF') {
     if(is.null(inv_prior_X)) {
@@ -254,8 +250,9 @@ GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,weights = NULL
 }
 
 
-run_GridLMM_GWAS = function(Y,X_cov,X_list_full, X_list_reduced = NULL,inv_prior_X = NULL,X_map = NULL, V_setup,h2_start=NULL,h2_step,target_prob = 0.99,proximal_markers=NULL, proximal_Xs=NULL, 
-                             method = c('REML','ML','BF'), mc.cores=my_detectCores(),verbose = FALSE)
+run_GridLMM_GWAS = function(Y,X_cov,X_list_full, X_list_reduced = NULL,inv_prior_X = NULL,X_map = NULL, V_setup,h2_start=NULL,h2_step=0.01,target_prob = 0.99,
+                            proximal_markers=NULL, proximal_Xs=NULL, 
+                            method = c('REML','ML','BF'), mc.cores=my_detectCores(),verbose = FALSE)
 {
   
   # -------- Evaluate argument options ---------- #
@@ -268,6 +265,10 @@ run_GridLMM_GWAS = function(Y,X_cov,X_list_full, X_list_reduced = NULL,inv_prior
   if(any(sapply(X_list_full,function(x) nrow(x)) != n)) stop("Wrong dimensions of some matrices in X_list_full")
   if(!is.null(X_list_reduced) && any(sapply(X_list_reduced,function(x) nrow(x)) != n)) stop("Wrong dimensions of some matrices in X_list_reduced")
   if(length(X_list_full) < length(X_list_reduced)) stop("X_list_reduced must be a smaller model than X_list_full")
+  
+  # check test names
+  if(is.null(colnames(X_list_full[[1]])))  colnames(X_list_full[[1]]) = 1:ncol(X_list_full[[1]])
+  if(!is.null(proximal_markers) && is.null(names(proximal_markers)[1])) names(proximal_markers) = colnames(X_list_full[[1]])
   
   if(is.null(inv_prior_X)) {
     if(method == 'BF') stop("Can't calculate Bayes Factors with impropper prior on X")
@@ -340,7 +341,7 @@ run_GridLMM_GWAS = function(Y,X_cov,X_list_full, X_list_reduced = NULL,inv_prior
         results$ML_Reduced_logLik[index_full] = results_reduced$ML_logLik[index_reduced]
         results$Reduced_Df_X[index_full] = results_reduced$Df_X[index_reduced]
         results$Reduced_X_id[index_full] = results_reduced$X_id[index_reduced]
-        
+
         results$p_value_ML = with(results,pchisq(2*(ML_logLik - ML_Reduced_logLik),Df_X - Reduced_Df_X,lower.tail = F))
       }
     }
@@ -487,9 +488,9 @@ fit_GridLMM_GWAS = function(Y,X_cov,X_list,h2_start,h2_step,V_setup,inv_prior_X 
       
       if(!is.null(proximal_markers)) {
         if(is.list(proximal_Xs)){
-          downdate_Xs = build_downdate_Xs(1:length(proximal_Xs),proximal_Xs,proximal_markers[active_X_list])
+          downdate_Xs = build_downdate_Xs(1:length(proximal_Xs),proximal_Xs,proximal_markers,active_X_list)
         } else{
-          downdate_Xs = build_downdate_Xs(proximal_Xs,X_list,proximal_markers[active_X_list])
+          downdate_Xs = build_downdate_Xs(proximal_Xs,X_list,proximal_markers,active_X_list)
         }
       }
       
@@ -503,7 +504,7 @@ fit_GridLMM_GWAS = function(Y,X_cov,X_list,h2_start,h2_step,V_setup,inv_prior_X 
         chol_V_setup = make_chol_V_setup(V_setup,h2s)
         chol_V = chol_V_setup$chol_V
         calc_LL_parallel(Y,X_cov,X_list,h2s,chol_V,inv_prior_X,
-                          downdate_Xs,V_setup$n_SNPs_downdated_RRM,REML,BF,inner_cores,active_X_list)
+                         downdate_Xs,V_setup$n_SNPs_downdated_RRM,REML,BF,inner_cores,active_X_list)
       }
       tested_h2s = rbind(tested_h2s,h2s_to_test)
       

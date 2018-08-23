@@ -18,7 +18,7 @@
 #' @examples
 GridLMMnet = function(formula,data,X, X_ID = 'ID', weights = NULL, 
                       centerX = TRUE,scaleX = TRUE,relmat = NULL,
-                      h2_divisions = 10, h2_start = NULL,
+                      h2_step = 0.1, h2_start = NULL,
                       alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001), lambda=NULL,
                       nfolds = NULL,foldid = NULL,
                       RE_setup = NULL, V_setup = NULL, save_V_folder = NULL,
@@ -38,7 +38,7 @@ GridLMMnet = function(formula,data,X, X_ID = 'ID', weights = NULL,
   
   
   # ----------- setup Grid ------------- #
-  setup$h2s_matrix = setup_Grid(names(setup$V_setup$RE_setup),1/h2_divisions,h2_start)
+  setup$h2s_matrix = setup_Grid(names(setup$V_setup$RE_setup),h2_step,h2_start)
   
   cl = start_cluster(mc.cores,clusterType)
   setup$V_setup = calculate_Grid(setup$V_setup,setup$h2s_matrix,verbose)
@@ -95,14 +95,11 @@ GridLMMnet_setup = function(formula,data,X, X_ID = 'ID', weights = NULL,
   
   # -------- prep Mixed Models ---------- #
   MM = prepMM(formula,data,weights,other_formulas = NULL,
-              relmat,X,X_ID,proximal_markers=NULL,verbose)
+              relmat,X,X_ID,proximal_markers=NULL,V_setup,diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
   lmod = MM$lmod
   RE_setup = MM$RE_setup
+  V_setup = MM$V_setup
   
-  # -------- prep V_setup ---------- #
-  if(is.null(V_setup)) {
-    V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K = TRUE,drop0_tol = 1e-10,save_V_folder,verbose)
-  } 
   
   y = matrix(lmod$fr[,1])
   n = nobs = nrow(y)

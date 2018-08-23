@@ -4,6 +4,15 @@
 // [[Rcpp::depends(RcppEigen)]]
 using namespace Eigen;
 
+// [[Rcpp::export()]]
+Rcpp::List svd_c(Map<MatrixXd> X) {
+  // Replacement of R's svd function with Eigen's version
+  Eigen::BDCSVD<MatrixXd> bcdsolve(X, Eigen::ComputeFullU | Eigen::ComputeFullV);
+  return(Rcpp::List::create(Named("u") = bcdsolve.matrixU(),
+                            Named("d") = bcdsolve.singularValues(),
+                            Named("v") = bcdsolve.matrixV()));
+}
+
 
 // [[Rcpp::export()]]
 MatrixXd chol_c(Map<MatrixXd> X){
@@ -14,12 +23,24 @@ MatrixXd chol_c(Map<MatrixXd> X){
 }
 
 // [[Rcpp::export()]]
-Rcpp::List premultiply_list_of_matrices(MSpMat Qt, Rcpp::List X_list){
+Rcpp::List premultiply_list_of_matrices(SEXP Qt_, Rcpp::List X_list){
   int p = X_list.length();
   Rcpp::List X_list_new;
+  
+  bool Qt_dense = Rf_isMatrix(Qt_);
+  MatrixXd Qt_matrix;
+  if(Qt_dense) {
+    Qt_matrix = as<MatrixXd>(Qt_);
+  } 
+  
   for(int i = 0; i < p; i++){
     MatrixXd Xi = Rcpp::as<Map<MatrixXd> >(X_list[i]);
-    X_list_new.push_back(Qt * Xi);
+    if(Qt_dense) {
+      X_list_new.push_back(Qt_matrix * Xi);
+    } else{
+      MSpMat Qt_SpMat = as<MSpMat>(Qt_);
+      X_list_new.push_back(Qt_SpMat * Xi);
+    }
   }
   return(X_list_new);
 }  
@@ -405,7 +426,8 @@ Rcpp::List GridLMM_SS_matrix(
 Rcpp::List build_downdate_Xs(
     IntegerVector RE_index,
     Rcpp::List X_list_,
-    Rcpp::List proximal_markers
+    Rcpp::List proximal_markers,
+    IntegerVector active_X_list
 ) {
   // Each row of proximal matrix is a vector of 0/1 listing which markers are proximal for a test.
   // X_list is a list of matrices (#=b_x). Each test pulls 1 column from each matrix
@@ -417,6 +439,7 @@ Rcpp::List build_downdate_Xs(
   // Note: coming from R, all indexes are 1-based
   
   int p = proximal_markers.length();
+  int p_active = active_X_list.size();
   
   Rcpp::List downdate_Xs(p);
   
@@ -436,7 +459,8 @@ Rcpp::List build_downdate_Xs(
   int n = X_list[0].rows();
   
   IntegerVector proximal_markers_0(0);
-  for(int i = 0; i < p; i++){
+  for(int i_active = 0; i_active < p_active; i_active++){
+    int i = active_X_list(i_active)-1;  // i indexes proximal_markers (full marker order). i_active indexes active_X_list
     // find which markers differ from previous test
     // -1:drop for this test, +1: recover from previous test
     IntegerVector proximal_markers_i = as<IntegerVector>(proximal_markers[i]);
@@ -465,7 +489,9 @@ Rcpp::List build_downdate_Xs(
       }
     }
     downdate_Xs[i] = Rcpp::List::create(Named("downdate_Xi") = dXi,
-                                        Named("signs_i") = downdate_signs_i);
+                                        Named("signs_i") = downdate_signs_i,
+                                        Named("add_markers") = add_markers,
+                                        Named("drop_markers") = drop_markers);
     
     
     proximal_markers_0 = proximal_markers_i;
@@ -491,12 +517,12 @@ Rcpp::List GridLMM_SS_downdate_matrix(
   int b_cov = X_cov.cols();
   int b_x = X_list_.length();
   int b = b_cov + b_x;
-  int p = downdate_Xs.size();
+  int p = X_indices.size();
   
   if(X_cov.rows() != n) stop("Wrong dimenions of X_cov");
   if(inv_prior_X.size() < b) stop("Wrong length of inv_prior_X");
   if(chol_Vi_R.cols() != n || chol_Vi_R.rows() != n) stop("Wrong dimenions of chol_Vi_R");
-  if(X_indices.size() != downdate_Xs.length()) stop("Wrong length of X_indices");
+  if(X_indices.maxCoeff() > downdate_Xs.length()) stop("Bad indices in X_indices");
   
   std::vector<SS_result> results;
   
@@ -504,7 +530,7 @@ Rcpp::List GridLMM_SS_downdate_matrix(
   std::vector<Map<MatrixXd> > X_list;
   for(int j = 0; j < b_x; j++) {
     X_list.push_back(as<Map<MatrixXd> >(X_list_[j]));
-    if(X_list[j].cols() != X_list[0].cols()) stop("Different numbers of columns in X_list matrices");
+    if(X_list[j].cols() != downdate_Xs.length()) stop("Number of columns in X_list matrices not equal to length of downdate_Xs");
     if(X_list[j].rows() != n) stop("Wrong number of rows in X_list matrices");
   }
   
@@ -512,10 +538,11 @@ Rcpp::List GridLMM_SS_downdate_matrix(
   YXf.leftCols(m) = Y;
   YXf.block(0,m,n,b_cov) = X_cov;
   for(int i = 0; i < p; i++) {
+    int index_i = X_indices[i]-1;
     
     // update chol_Vi_R and V_log_det
     
-    Rcpp::List downdate_i = as<Rcpp::List>(downdate_Xs[i]);  // List with downdate Info
+    Rcpp::List downdate_i = as<Rcpp::List>(downdate_Xs[index_i]);  // List with downdate Info
     Rcpp::List downdate_Xis = as<Rcpp::List>(downdate_i["downdate_Xi"]); // List of downdate Matrices (ie for different random effects)
     VectorXd downdate_signs = as<VectorXd>(downdate_i["signs_i"]); // each downdate matrix has same number of columns, and the corrresponding columns are added or removed in each matrix
     int n_downdate = downdate_Xis.length();
@@ -532,7 +559,6 @@ Rcpp::List GridLMM_SS_downdate_matrix(
     // re-form column of X into a n x b_x design matrix
     if(b_x > 0) {
       MatrixXd Xi(n,b_x);
-      int index_i = X_indices[i]-1;
       for(int j = 0; j < b_x; j++) {
         Xi.col(j) = X_list[j].col(index_i);
       }

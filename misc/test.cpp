@@ -14,6 +14,55 @@ using namespace Eigen;
 
 
 // [[Rcpp::export()]]
+Rcpp::List svd_c(Map<MatrixXd> X) {
+  Eigen::BDCSVD<MatrixXd> bcdsolve(X, Eigen::ComputeFullU | Eigen::ComputeFullV);
+  // bcdsolve.computeU();
+  // MatrixXd U = bcdsolve.matrixU();
+  return(Rcpp::List::create(Named("u") = bcdsolve.matrixU(),
+                     Named("d") = bcdsolve.singularValues()));
+}
+
+
+// [[Rcpp::export()]]
+Rcpp::List svd_c3(SEXP X) {
+  if(Rf_isMatrix(X)) {
+    Eigen::BDCSVD<MatrixXd> bcdsolve(X, Eigen::ComputeFullU | Eigen::ComputeFullV);
+    // bcdsolve.computeU();
+    // MatrixXd U = bcdsolve.matrixU();
+    return(Rcpp::List::create(Named("u") = bcdsolve.matrixU(),
+                              Named("d") = bcdsolve.singularValues()));
+  } else{
+    Eigen::BDCSVD<MSpMat> bcdsolve(X, Eigen::ComputeFullU | Eigen::ComputeFullV);
+    // bcdsolve.computeU();
+    // MatrixXd U = bcdsolve.matrixU();
+    return(Rcpp::List::create(Named("u") = bcdsolve.matrixU(),
+                              Named("d") = bcdsolve.singularValues()));
+  }
+}
+
+// [[Rcpp::export()]]
+Rcpp::List svd_c2(MatrixXd X) {
+  Eigen::BDCSVD<MatrixXd> bcdsolve(X, Eigen::ComputeFullU | Eigen::ComputeFullV);
+  // bcdsolve.computeU();
+  // MatrixXd U = bcdsolve.matrixU();
+  return(Rcpp::List::create(Named("u") = bcdsolve.matrixU(),
+                            Named("d") = bcdsolve.singularValues()));
+}
+
+
+// [[Rcpp::export()]]
+void m1(Map<MatrixXd> X){
+  X *= 3;
+}
+
+// [[Rcpp::export()]]
+void m1b(Map<MatrixXd> X){
+  MatrixXd X2(X);
+  X2 *= 3;
+}
+
+
+// [[Rcpp::export()]]
 void test_list(Rcpp::List X_){
   std::vector<Map<MatrixXd> > X;
   for(int i = 0; i < X_.length(); i++){

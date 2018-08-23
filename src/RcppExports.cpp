@@ -7,6 +7,17 @@
 
 using namespace Rcpp;
 
+// svd_c
+Rcpp::List svd_c(Map<MatrixXd> X);
+RcppExport SEXP _GridLMM_svd_c(SEXP XSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Map<MatrixXd> >::type X(XSEXP);
+    rcpp_result_gen = Rcpp::wrap(svd_c(X));
+    return rcpp_result_gen;
+END_RCPP
+}
 // chol_c
 MatrixXd chol_c(Map<MatrixXd> X);
 RcppExport SEXP _GridLMM_chol_c(SEXP XSEXP) {
@@ -19,14 +30,14 @@ BEGIN_RCPP
 END_RCPP
 }
 // premultiply_list_of_matrices
-Rcpp::List premultiply_list_of_matrices(MSpMat Qt, Rcpp::List X_list);
-RcppExport SEXP _GridLMM_premultiply_list_of_matrices(SEXP QtSEXP, SEXP X_listSEXP) {
+Rcpp::List premultiply_list_of_matrices(SEXP Qt_, Rcpp::List X_list);
+RcppExport SEXP _GridLMM_premultiply_list_of_matrices(SEXP Qt_SEXP, SEXP X_listSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< MSpMat >::type Qt(QtSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type Qt_(Qt_SEXP);
     Rcpp::traits::input_parameter< Rcpp::List >::type X_list(X_listSEXP);
-    rcpp_result_gen = Rcpp::wrap(premultiply_list_of_matrices(Qt, X_list));
+    rcpp_result_gen = Rcpp::wrap(premultiply_list_of_matrices(Qt_, X_list));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -127,15 +138,16 @@ BEGIN_RCPP
 END_RCPP
 }
 // build_downdate_Xs
-Rcpp::List build_downdate_Xs(IntegerVector RE_index, Rcpp::List X_list_, Rcpp::List proximal_markers);
-RcppExport SEXP _GridLMM_build_downdate_Xs(SEXP RE_indexSEXP, SEXP X_list_SEXP, SEXP proximal_markersSEXP) {
+Rcpp::List build_downdate_Xs(IntegerVector RE_index, Rcpp::List X_list_, Rcpp::List proximal_markers, IntegerVector active_X_list);
+RcppExport SEXP _GridLMM_build_downdate_Xs(SEXP RE_indexSEXP, SEXP X_list_SEXP, SEXP proximal_markersSEXP, SEXP active_X_listSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< IntegerVector >::type RE_index(RE_indexSEXP);
     Rcpp::traits::input_parameter< Rcpp::List >::type X_list_(X_list_SEXP);
     Rcpp::traits::input_parameter< Rcpp::List >::type proximal_markers(proximal_markersSEXP);
-    rcpp_result_gen = Rcpp::wrap(build_downdate_Xs(RE_index, X_list_, proximal_markers));
+    Rcpp::traits::input_parameter< IntegerVector >::type active_X_list(active_X_listSEXP);
+    rcpp_result_gen = Rcpp::wrap(build_downdate_Xs(RE_index, X_list_, proximal_markers, active_X_list));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -156,24 +168,4 @@ BEGIN_RCPP
     rcpp_result_gen = Rcpp::wrap(GridLMM_SS_downdate_matrix(Y, chol_Vi_R, X_cov, X_list_, X_indices, downdate_Xs, downdate_weights, inv_prior_X));
     return rcpp_result_gen;
 END_RCPP
-}
-
-static const R_CallMethodDef CallEntries[] = {
-    {"_GridLMM_chol_c", (DL_FUNC) &_GridLMM_chol_c, 1},
-    {"_GridLMM_premultiply_list_of_matrices", (DL_FUNC) &_GridLMM_premultiply_list_of_matrices, 2},
-    {"_GridLMM_chol_update_L", (DL_FUNC) &_GridLMM_chol_update_L, 3},
-    {"_GridLMM_chol_update", (DL_FUNC) &_GridLMM_chol_update, 3},
-    {"_GridLMM_chol_dropRows", (DL_FUNC) &_GridLMM_chol_dropRows, 3},
-    {"_GridLMM_crossprod_cholR", (DL_FUNC) &_GridLMM_crossprod_cholR, 2},
-    {"_GridLMM_F_hats", (DL_FUNC) &_GridLMM_F_hats, 6},
-    {"_GridLMM_log_det_of_XtX", (DL_FUNC) &_GridLMM_log_det_of_XtX, 3},
-    {"_GridLMM_GridLMM_SS_matrix", (DL_FUNC) &_GridLMM_GridLMM_SS_matrix, 6},
-    {"_GridLMM_build_downdate_Xs", (DL_FUNC) &_GridLMM_build_downdate_Xs, 3},
-    {"_GridLMM_GridLMM_SS_downdate_matrix", (DL_FUNC) &_GridLMM_GridLMM_SS_downdate_matrix, 8},
-    {NULL, NULL, 0}
-};
-
-RcppExport void R_init_GridLMM(DllInfo *dll) {
-    R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
-    R_useDynamicSymbols(dll, FALSE);
 }

@@ -8,8 +8,7 @@ GridLMM_posterior(formula, data, weights = NULL, relmat = NULL,
   h2_divisions = 10, h2_prior = function(h2s, n) 1/n, a = 0, b = 0,
   inv_prior_X = 0, target_prob = 0.99, thresh_nonzero = 10,
   thresh_nonzero_marginal = 0, V_setup = NULL, save_V_folder = NULL,
-  diagonalize = T, svd_K = T, drop0_tol = 1e-10,
-  mc.cores = my_detectCores(), verbose = T)
+  diagonalize = T, mc.cores = my_detectCores(), verbose = T)
 }
 \arguments{
 \item{formula}{A two-sided linear formula as used in \code{\link[lme4]{lmer}} describing the fixed-effects
@@ -49,13 +48,13 @@ If null, V decompositions are stored in memory}
 \item{diagonalize}{If TRUE and the model includes only a single random effect, the "GEMMA" trick will be used to diagonalize V. This is done
 by calculating the SVD of K, which can be slow for large samples.}
 
-\item{svd_K}{If TRUE and \code{nrow(K) < nrow(Z)}, then the SVD is done on \eqn{K} instead of \eqn{ZKZ^T}}
-
-\item{drop0_tol}{Values closer to zero than this will be set to zero when forming sparse matrices.}
-
 \item{mc.cores}{Number of cores to use for parallel evaluations.}
 
 \item{verbose}{Should progress be printed to the screen?}
+
+\item{svd_K}{If TRUE and \code{nrow(K) < nrow(Z)}, then the SVD is done on \eqn{K} instead of \eqn{ZKZ^T}}
+
+\item{drop0_tol}{Values closer to zero than this will be set to zero when forming sparse matrices.}
 }
 \value{
 A list with three elements:
