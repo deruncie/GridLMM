@@ -298,7 +298,7 @@ set_p_test = function(V_setup,p_test = NULL, p = NULL){
   for(re in names(RE_setup)) {
     if(is.null(RE_setup[[re]]$p)) {
       downdate_ratios[re] = 1
-      n_SNPs_downdated_RRM[re] = 0
+      n_SNPs_downdated_RRM[re] = Inf
     } else {
       if(is.null(RE_setup[[re]]$p_test)) RE_setup[[re]]$p_test = 0 # assume p_test == 0 if not provided
       n_SNPs_downdated_RRM[re] = RE_setup[[re]]$p - RE_setup[[re]]$p_test
