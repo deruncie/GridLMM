@@ -699,21 +699,25 @@ compile_results = function(results_list){
   F_columns = colnames(results)[grep("F.",colnames(results),fixed=T)]
   posterior_column = colnames(results)[grep("log_posterior_factor",colnames(results),fixed=T)]
   
+  ML = FALSE
+  if(length(ML_h2_columns) > 0) ML = TRUE
   REML = FALSE
   if(length(REML_h2_columns) > 0) REML = TRUE
   BF = FALSE
   if(length(posterior_column) > 0) BF = TRUE
   
-  MLs <- foreach(results_i = results_list,index = results_list_ID,.combine = 'cbind') %do% results_i$ML_logLik[index] 
-  max_ML_index = apply(MLs,1,function(x) which.max(x)[1])
-  results$ML_index = max_ML_index
-  
-  ML_index = 1:nrow(MLs) + (max_ML_index-1)*nrow(MLs) # this pulls out the ML value from each row from the column given by max_ML_index
-  results$ML_logLik = MLs[ML_index] 
-  
-  for(ML_h2_column in ML_h2_columns) {
-    ML_h2s = foreach(results_i = results_list,index = results_list_ID,.combine = 'cbind') %do% results_i[index,ML_h2_column]
-    results[[ML_h2_column]] = ML_h2s[ML_index]
+  if(ML) {
+    MLs <- foreach(results_i = results_list,index = results_list_ID,.combine = 'cbind') %do% results_i$ML_logLik[index] 
+    max_ML_index = apply(MLs,1,function(x) which.max(x)[1])
+    results$ML_index = max_ML_index
+    
+    ML_index = 1:nrow(MLs) + (max_ML_index-1)*nrow(MLs) # this pulls out the ML value from each row from the column given by max_ML_index
+    results$ML_logLik = MLs[ML_index] 
+    
+    for(ML_h2_column in ML_h2_columns) {
+      ML_h2s = foreach(results_i = results_list,index = results_list_ID,.combine = 'cbind') %do% results_i[index,ML_h2_column]
+      results[[ML_h2_column]] = ML_h2s[ML_index]
+    }
   }
   
   if(!REML) {

@@ -169,3 +169,73 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// GridLMM_test_setTest
+Rcpp::List GridLMM_test_setTest(MatrixXd Y, MatrixXd chol_Vi_R, MatrixXd G, MatrixXd X, double tolerance);
+RcppExport SEXP _GridLMM_GridLMM_test_setTest(SEXP YSEXP, SEXP chol_Vi_RSEXP, SEXP GSEXP, SEXP XSEXP, SEXP toleranceSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< MatrixXd >::type Y(YSEXP);
+    Rcpp::traits::input_parameter< MatrixXd >::type chol_Vi_R(chol_Vi_RSEXP);
+    Rcpp::traits::input_parameter< MatrixXd >::type G(GSEXP);
+    Rcpp::traits::input_parameter< MatrixXd >::type X(XSEXP);
+    Rcpp::traits::input_parameter< double >::type tolerance(toleranceSEXP);
+    rcpp_result_gen = Rcpp::wrap(GridLMM_test_setTest(Y, chol_Vi_R, G, X, tolerance));
+    return rcpp_result_gen;
+END_RCPP
+}
+// GridLMM_setTest_downdate_matrix
+Rcpp::List GridLMM_setTest_downdate_matrix(Map<MatrixXd> Y, MatrixXd chol_Vi_R, Map<MatrixXd> X_cov, Map<MatrixXd> X, ArrayXXi X_indices, Rcpp::List downdate_Xs, VectorXd downdate_weights, VectorXd inv_prior_X, double tolerance);
+RcppExport SEXP _GridLMM_GridLMM_setTest_downdate_matrix(SEXP YSEXP, SEXP chol_Vi_RSEXP, SEXP X_covSEXP, SEXP XSEXP, SEXP X_indicesSEXP, SEXP downdate_XsSEXP, SEXP downdate_weightsSEXP, SEXP inv_prior_XSEXP, SEXP toleranceSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Map<MatrixXd> >::type Y(YSEXP);
+    Rcpp::traits::input_parameter< MatrixXd >::type chol_Vi_R(chol_Vi_RSEXP);
+    Rcpp::traits::input_parameter< Map<MatrixXd> >::type X_cov(X_covSEXP);
+    Rcpp::traits::input_parameter< Map<MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< ArrayXXi >::type X_indices(X_indicesSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type downdate_Xs(downdate_XsSEXP);
+    Rcpp::traits::input_parameter< VectorXd >::type downdate_weights(downdate_weightsSEXP);
+    Rcpp::traits::input_parameter< VectorXd >::type inv_prior_X(inv_prior_XSEXP);
+    Rcpp::traits::input_parameter< double >::type tolerance(toleranceSEXP);
+    rcpp_result_gen = Rcpp::wrap(GridLMM_setTest_downdate_matrix(Y, chol_Vi_R, X_cov, X, X_indices, downdate_Xs, downdate_weights, inv_prior_X, tolerance));
+    return rcpp_result_gen;
+END_RCPP
+}
+// GridLMM_test_setTest2
+Rcpp::List GridLMM_test_setTest2(MatrixXd Y, MatrixXd chol_Vi_R, MatrixXd G, MatrixXd X, double tolerance);
+RcppExport SEXP _GridLMM_GridLMM_test_setTest2(SEXP YSEXP, SEXP chol_Vi_RSEXP, SEXP GSEXP, SEXP XSEXP, SEXP toleranceSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< MatrixXd >::type Y(YSEXP);
+    Rcpp::traits::input_parameter< MatrixXd >::type chol_Vi_R(chol_Vi_RSEXP);
+    Rcpp::traits::input_parameter< MatrixXd >::type G(GSEXP);
+    Rcpp::traits::input_parameter< MatrixXd >::type X(XSEXP);
+    Rcpp::traits::input_parameter< double >::type tolerance(toleranceSEXP);
+    rcpp_result_gen = Rcpp::wrap(GridLMM_test_setTest2(Y, chol_Vi_R, G, X, tolerance));
+    return rcpp_result_gen;
+END_RCPP
+}
+// f
+double f(double x);
+RcppExport SEXP _GridLMM_f(SEXP xSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< double >::type x(xSEXP);
+    rcpp_result_gen = Rcpp::wrap(f(x));
+    return rcpp_result_gen;
+END_RCPP
+}
+// min_f
+List min_f();
+RcppExport SEXP _GridLMM_min_f() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    rcpp_result_gen = Rcpp::wrap(min_f());
+    return rcpp_result_gen;
+END_RCPP
+}

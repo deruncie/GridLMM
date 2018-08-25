@@ -2,9 +2,41 @@ library(GridLMM)
 
 set.seed(1)
 # simulation with 1 RE, n=100
-n = 1000
-nG = 50
+n = 500
+nG = 100
 data = data.frame(Group = factor(rep(1:nG,each = n/nG)),cov = sample(c(-1,1),n,replace=T)) # cov is a covariate for all tests
+
+
+h2 = 0.15
+data$y = sqrt(h2)*rnorm(nG)[data$Group] + sqrt(1-h2)*rnorm(n)
+
+library(lme4)
+m1 = lmer(y~(1|Group),data)
+vars = as.data.frame(VarCorr(m1))$vcov;vars/sum(vars)
+x = model.matrix(~1,data)
+g = model.matrix(~0+Group,data)
+chol_Vi_R = diag(1,n)
+r = GridLMM_test_setTest(as.matrix(data$y),chol_Vi_R,g*sqrt(ncol(g)),x)
+r$taus
+r2 = GridLMM_test_setTest2(as.matrix(data$y),chol_Vi_R,g*sqrt(ncol(g)),x)
+r2$taus
+
+microbenchmark(GridLMM_test_setTest(as.matrix(data$y),chol_Vi_R,g*sqrt(ncol(g)),x),
+               GridLMM_test_setTest2(as.matrix(data$y),chol_Vi_R,g*sqrt(ncol(g)),x),
+               times = 10)
+
+library(microbenchmark)
+microbenchmark(lmer(y~(1|Group),data),GridLMM_test_setTest(as.matrix(data$y),chol_Vi_R,g*sqrt(ncol(g)),x),times=6)
+tau = 0.611854
+G = tcrossprod(g*sqrt(ncol(g)))
+determinant(tau/ncol(g)*G + (1-tau)*diag(1,n))
+R = chol(tau/ncol(g)*G + (1-tau)*diag(1,n))
+ystd = solve(t(R),data$y)
+xstd = solve(t(R),x)
+e = resid(lm(ystd~0+xstd))
+sum(e^2)
+
+
 p = 1000
 Z = model.matrix(~0+Group,data)
 K = Z %*% t(Z)
@@ -41,6 +73,7 @@ y = y/sd(y)
 data$y = y
 
 
+
 g0 = GridLMM_ML(y~cov+(1|Group),data,relmat = list(Group = tcrossprod(scale_SNPs(Xg,scaleX = F))/p))
 g0$results
 g0 = GridLMM_ML(y~cov+(1|ID),data,relmat = list(ID = K))
@@ -63,7 +96,7 @@ head(g2b$results)
 g3 = GridLMM_GWAS(y~cov + (1|ID),~1,~0,data = data,X = X,X_ID = 'ID',h2_step = 0.01,mc.cores=1,algorithm = 'Fast',
                   method='ML',centerX=T,relmat = list(ID = K))
 g4 = GridLMM_GWAS(y~cov + (1|ID),~1,~0,data = data,X = X,X_ID = 'ID',h2_step = 0.01,mc.cores=1,algorithm = 'Fast',
-                  centerX = T,relmat = list(ID = list(K=K,p=2*p)),#h2_start = c(ID = 0.43)
+                  centerX = T,relmat = list(ID = list(K=K,p=2*p)),h2_start = c(ID = 0.43),
                   proximal_markers = proximal_markers,diagonalize = F,method='ML')
 # qq_p_plot(g4$results$p_value_REML)
 qq_p_plot(list(g3=g3$results$p_value_ML,g4=g4$results$p_value_ML))

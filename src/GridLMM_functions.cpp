@@ -254,18 +254,6 @@ VectorXd log_det_of_XtX(
   return(log_det);
 }
 
-
-
-
-
-struct SS_result{
-  MatrixXd beta_hats;
-  VectorXd RSSs;
-  double V_log_det;
-  double V_star_inv_log_det;
-  VectorXd V_star_L;
-};
-
 SS_result GridLMM_SS(
     MatrixXd &Y_std,
     MatrixXd &X_std,
@@ -284,6 +272,9 @@ SS_result GridLMM_SS(
   result.beta_hats = b_hat;
   result.RSSs = eta_std.cwiseProduct(eta_std).colwise().sum();
   
+  result.ML = ArrayXd::Constant(Y_std.cols(),0);
+  result.REML = ArrayXd::Constant(Y_std.cols(),0);
+  
   return(result);
 }
 
@@ -301,6 +292,9 @@ Rcpp::List collect_SS_results(
   VectorXd V_star_inv_log_det(p);
   VectorXd V_log_det(p);
   
+  // MatrixXd MLs(m,p);
+  // MatrixXd REMLs(m,p);
+  
   for(int i = 0; i < p; i++){
     SS_result results_i = results[i];
     beta_hats.col(i) = Map<VectorXd>(results_i.beta_hats.data(),results_i.beta_hats.size());
@@ -308,13 +302,20 @@ Rcpp::List collect_SS_results(
     V_star_L.col(i) = results_i.V_star_L;
     V_star_inv_log_det(i) = results_i.V_star_inv_log_det;
     V_log_det(i) = results_i.V_log_det;
+    
+    // MLs.col(i) = results_i.ML;
+    // REMLs.col(i) = results_i.REML;
   }
   
   return(Rcpp::List::create(Named("beta_hats") = beta_hats,
                             Named("RSSs") = RSSs,
                             Named("V_log_dets") = V_log_det,
                             Named("V_star_inv_log_det") = V_star_inv_log_det,
-                            Named("V_star_L") = V_star_L));
+                            Named("V_star_L") = V_star_L
+                            // ,Named("MLs") = MLs
+                            // ,Named("REMLs") = REMLs
+                            )
+           );
 }
 
 
@@ -578,6 +579,11 @@ Rcpp::List GridLMM_SS_downdate_matrix(
     
     // Then solve the model
     SS_result result_i = GridLMM_SS(Y_std,Xf_std,L,V_log_det);
+    
+    
+    // MatrixXd Xi = YXf.rightCols(b);
+    // result_i.ML = calc_ML_c(result_i,Y_std.rows());
+    // result_i.REML = calc_REML_c(result_i,Xi);
     
     results.push_back(result_i);
   }

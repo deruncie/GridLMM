@@ -49,3 +49,23 @@ GridLMM_SS_downdate_matrix <- function(Y, chol_Vi_R, X_cov, X_list_, X_indices, 
     .Call('_GridLMM_GridLMM_SS_downdate_matrix', PACKAGE = 'GridLMM', Y, chol_Vi_R, X_cov, X_list_, X_indices, downdate_Xs, downdate_weights, inv_prior_X)
 }
 
+GridLMM_test_setTest <- function(Y, chol_Vi_R, G, X, tolerance = 0.01) {
+    .Call('_GridLMM_GridLMM_test_setTest', PACKAGE = 'GridLMM', Y, chol_Vi_R, G, X, tolerance)
+}
+
+GridLMM_setTest_downdate_matrix <- function(Y, chol_Vi_R, X_cov, X, X_indices, downdate_Xs, downdate_weights, inv_prior_X, tolerance = 0.01) {
+    .Call('_GridLMM_GridLMM_setTest_downdate_matrix', PACKAGE = 'GridLMM', Y, chol_Vi_R, X_cov, X, X_indices, downdate_Xs, downdate_weights, inv_prior_X, tolerance)
+}
+
+GridLMM_test_setTest2 <- function(Y, chol_Vi_R, G, X, tolerance = 0.01) {
+    .Call('_GridLMM_GridLMM_test_setTest2', PACKAGE = 'GridLMM', Y, chol_Vi_R, G, X, tolerance)
+}
+
+f <- function(x) {
+    .Call('_GridLMM_f', PACKAGE = 'GridLMM', x)
+}
+
+min_f <- function() {
+    .Call('_GridLMM_min_f', PACKAGE = 'GridLMM')
+}
+
