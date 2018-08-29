@@ -698,6 +698,7 @@ compile_results = function(results_list){
   REML_h2_columns = colnames(results)[grep(".REML",colnames(results),fixed=T)]
   F_columns = colnames(results)[grep("F.",colnames(results),fixed=T)]
   posterior_column = colnames(results)[grep("log_posterior_factor",colnames(results),fixed=T)]
+  tau_column = colnames(results)[grep("Tau",colnames(results),fixed=T)]
   
   ML = FALSE
   if(length(ML_h2_columns) > 0) ML = TRUE
@@ -747,7 +748,14 @@ compile_results = function(results_list){
       F_hats = betas = foreach(results_i = results_list,index = results_list_ID,.combine = 'cbind') %do% results_i[index,F_column]
       results[[F_column]] = F_hats[REML_index]
     }
+    
+    if(length(tau_column)>0) {
+      taus = foreach(results_i = results_list,index = results_list_ID,.combine = 'cbind') %do% results_i[index,tau_column]
+      results[[tau_column]] = taus[REML_index]
+    }
+    
   }
+  
   
   if(BF) {
     log_posterior_factors = foreach(results_i = results_list,index = results_list_ID,.combine = 'cbind') %do% results_i[index,posterior_column]

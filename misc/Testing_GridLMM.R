@@ -2,8 +2,8 @@ library(GridLMM)
 
 set.seed(1)
 # simulation with 1 RE, n=100
-n = 500
-nG = 100
+n = 4000
+nG = 20
 data = data.frame(Group = factor(rep(1:nG,each = n/nG)),cov = sample(c(-1,1),n,replace=T)) # cov is a covariate for all tests
 
 
@@ -14,6 +14,7 @@ library(lme4)
 m1 = lmer(y~(1|Group),data)
 vars = as.data.frame(VarCorr(m1))$vcov;vars/sum(vars)
 x = model.matrix(~1,data)
+# x = matrix(rnorm(n*20),n)
 g = model.matrix(~0+Group,data)
 chol_Vi_R = diag(1,n)
 r = GridLMM_test_setTest(as.matrix(data$y),chol_Vi_R,g*sqrt(ncol(g)),x)

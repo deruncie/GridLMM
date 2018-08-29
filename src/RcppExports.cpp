@@ -7,6 +7,24 @@
 
 using namespace Rcpp;
 
+// GridLMM_SS_cisQTL
+Rcpp::List GridLMM_SS_cisQTL(Map<MatrixXd> Y, SEXP chol_Vi_R_, MatrixXd X_cov, Map<MatrixXd> X, MatrixXd X_indices, Rcpp::List downdate_Xs, VectorXd downdate_weights, VectorXd inv_prior_X);
+RcppExport SEXP _GridLMM_GridLMM_SS_cisQTL(SEXP YSEXP, SEXP chol_Vi_R_SEXP, SEXP X_covSEXP, SEXP XSEXP, SEXP X_indicesSEXP, SEXP downdate_XsSEXP, SEXP downdate_weightsSEXP, SEXP inv_prior_XSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Map<MatrixXd> >::type Y(YSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type chol_Vi_R_(chol_Vi_R_SEXP);
+    Rcpp::traits::input_parameter< MatrixXd >::type X_cov(X_covSEXP);
+    Rcpp::traits::input_parameter< Map<MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< MatrixXd >::type X_indices(X_indicesSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type downdate_Xs(downdate_XsSEXP);
+    Rcpp::traits::input_parameter< VectorXd >::type downdate_weights(downdate_weightsSEXP);
+    Rcpp::traits::input_parameter< VectorXd >::type inv_prior_X(inv_prior_XSEXP);
+    rcpp_result_gen = Rcpp::wrap(GridLMM_SS_cisQTL(Y, chol_Vi_R_, X_cov, X, X_indices, downdate_Xs, downdate_weights, inv_prior_X));
+    return rcpp_result_gen;
+END_RCPP
+}
 // svd_c
 Rcpp::List svd_c(Map<MatrixXd> X);
 RcppExport SEXP _GridLMM_svd_c(SEXP XSEXP) {

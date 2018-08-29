@@ -20,7 +20,8 @@ struct SS_result{
   double V_log_det;
   double V_star_inv_log_det;
   VectorXd V_star_L;
-  ArrayXd ML,REML;
+  ArrayXd ML = ArrayXd::Zero(0);
+  ArrayXd REML = ArrayXd::Zero(0);
 };
 
 Rcpp::List svd_c(Map<MatrixXd> X);

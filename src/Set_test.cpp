@@ -2,28 +2,6 @@
 #include "brent.hpp"
 using namespace Rcpp;
 
-ArrayXd calc_ML_c(SS_result SS, int n){
-  double c = n*std::log(n/(2.0*M_PI)) - n - SS.V_log_det;
-  ArrayXd ML = -n/2.0*SS.RSSs.array().log() + c/2.0;
-  return(ML);
-}
-
-ArrayXd calc_REML_c(SS_result SS, MatrixXd &X){
-  int n = X.rows();
-  double b = X.cols();
-  int m = SS.RSSs.size();
-  ArrayXd ML = calc_ML_c(SS,n);
-  
-  MatrixXd XtX = X.transpose() * X;
-  Eigen::LLT<MatrixXd> llt_of_XtX(XtX);
-  MatrixXd L = llt_of_XtX.matrixL();
-  double log_det_X = 2*L.diagonal().array().log().sum();
-  
-  ArrayXd REML = ML + 0.5 * (b*(2.0*M_PI/(n-b)*SS.RSSs.array()).log() + log_det_X - SS.V_star_inv_log_det);
-  return(REML);
-}
-
-
 // This is more efficient for updating
 void chol_update_L_inplace(MatrixXd &L, MatrixXd X, VectorXd weights) {
   int n = L.rows();
@@ -218,20 +196,26 @@ Rcpp::List GridLMM_setTest_downdate_matrix(
       }
     }
     
-    // Extract G matrix
-    MatrixXd G = X.block(0,set_start,n,set_length);
-    
-    // copy chol_Vi_L for optimizing tau
-    MatrixXd chol_Vi_L = chol_Vi_R.transpose();
-    
-    // optimize tau
-    SS_result result_i;
-    optimizerTau get_tau(YXf, G, chol_Vi_L, result_i,
-                         inv_prior_X, m,b);
     double tau;
-    brent::local_min(0.0, 0.99, tolerance, get_tau, tau); // maximum of tau is 0.99
-    
-    double REML = fit_model_tau(result_i,tau,YXf, G, chol_Vi_L, inv_prior_X, m,b);
+    double REML;
+    MatrixXd G;
+    SS_result result_i;
+    MatrixXd chol_Vi_L = chol_Vi_R.transpose();
+    if(X.cols() > 0) {
+      // Extract G matrix
+      G = X.block(0,set_start,n,set_length);
+      
+      // copy chol_Vi_L for optimizing tau
+      
+      // optimize tau
+      optimizerTau get_tau(YXf, G, chol_Vi_L, result_i,
+                           inv_prior_X, m,b);
+      brent::local_min(0.0, 0.99, tolerance, get_tau, tau); // maximum of tau is 0.99
+    } else{
+      G = MatrixXd::Zero(n,0);
+      tau = 0;
+    }
+    REML = fit_model_tau(result_i,tau,YXf, G, chol_Vi_L, inv_prior_X, m,b);
     REMLs(i) = REML;
     taus(i) = tau;
     results.push_back(result_i);

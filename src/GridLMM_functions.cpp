@@ -186,6 +186,32 @@ MatrixXd crossprod_cholR(Map<MatrixXd> chol_R, Map<MatrixXd> X){
 }
 
 
+ArrayXd calc_ML_c(SS_result SS, int n){
+  double c = n*std::log(n/(2.0*M_PI)) - n - SS.V_log_det;
+  ArrayXd ML = -n/2.0*SS.RSSs.array().log() + c/2.0;
+  return(ML);
+}
+
+ArrayXd calc_REML_c(SS_result SS, MatrixXd &X){
+  int n = X.rows();
+  double b = X.cols();
+  // int m = SS.RSSs.size();
+  ArrayXd ML = SS.ML;
+  if(SS.ML.size() == 0) {
+    ML = calc_ML_c(SS,n);
+  }
+  
+  MatrixXd XtX = X.transpose() * X;
+  Eigen::LLT<MatrixXd> llt_of_XtX(XtX);
+  MatrixXd L = llt_of_XtX.matrixL();
+  double log_det_X = 2*L.diagonal().array().log().sum();
+  
+  ArrayXd REML = ML + 0.5 * (b*(2.0*M_PI/(n-b)*SS.RSSs.array()).log() + log_det_X - SS.V_star_inv_log_det);
+  return(REML);
+}
+
+
+
 // [[Rcpp::export()]]
 MatrixXd F_hats(
     Map<MatrixXd> beta_hats,
@@ -292,8 +318,8 @@ Rcpp::List collect_SS_results(
   VectorXd V_star_inv_log_det(p);
   VectorXd V_log_det(p);
   
-  // MatrixXd MLs(m,p);
-  // MatrixXd REMLs(m,p);
+  MatrixXd MLs(m,p);
+  MatrixXd REMLs(m,p);
   
   for(int i = 0; i < p; i++){
     SS_result results_i = results[i];
@@ -303,8 +329,8 @@ Rcpp::List collect_SS_results(
     V_star_inv_log_det(i) = results_i.V_star_inv_log_det;
     V_log_det(i) = results_i.V_log_det;
     
-    // MLs.col(i) = results_i.ML;
-    // REMLs.col(i) = results_i.REML;
+    MLs.col(i) = results_i.ML;
+    REMLs.col(i) = results_i.REML;
   }
   
   return(Rcpp::List::create(Named("beta_hats") = beta_hats,
@@ -312,8 +338,8 @@ Rcpp::List collect_SS_results(
                             Named("V_log_dets") = V_log_det,
                             Named("V_star_inv_log_det") = V_star_inv_log_det,
                             Named("V_star_L") = V_star_L
-                            // ,Named("MLs") = MLs
-                            // ,Named("REMLs") = REMLs
+                            ,Named("MLs") = MLs
+                            ,Named("REMLs") = REMLs
                             )
            );
 }
@@ -441,6 +467,7 @@ Rcpp::List build_downdate_Xs(
   
   int p = proximal_markers.length();
   int p_active = active_X_list.size();
+  if(max(active_X_list) > p) stop("active_X_list refers to non-existant proximal_markers list");
   
   Rcpp::List downdate_Xs(p);
   
@@ -464,17 +491,20 @@ Rcpp::List build_downdate_Xs(
     int i = active_X_list(i_active)-1;  // i indexes proximal_markers (full marker order). i_active indexes active_X_list
     // find which markers differ from previous test
     // -1:drop for this test, +1: recover from previous test
-    IntegerVector proximal_markers_i = as<IntegerVector>(proximal_markers[i]);
+    IntegerVector proximal_markers_i(0);
+    if(Rf_isInteger(proximal_markers[i])) {
+      proximal_markers_i = as<IntegerVector>(proximal_markers[i]);
+    }
     if(max(proximal_markers_i) > X_list[0].cols()) stop("some proximal markers not present in X_list");
-    
+
     IntegerVector add_markers = setdiff(proximal_markers_i,proximal_markers_0);
     IntegerVector drop_markers = setdiff(proximal_markers_0,proximal_markers_i);
-    
+
     VectorXd downdate_signs_i(add_markers.length() + drop_markers.length());
     downdate_signs_i << VectorXd::Constant(add_markers.length(),-1), VectorXd::Constant(drop_markers.length(),1);
-    
+
     Rcpp::List dXi(n_RE);  // List of downdate matrices for test i (one for each element of X_list)
-    Rcpp::List dsi(n_RE);
+
     for(int j = 0; j < n_RE; j++) {
       if(X_list[j].cols() > 0) {
         MatrixXd dXij(n,add_markers.length() + drop_markers.length());

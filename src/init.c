@@ -17,6 +17,7 @@ extern SEXP _GridLMM_crossprod_cholR(SEXP, SEXP);
 extern SEXP _GridLMM_f(SEXP);
 extern SEXP _GridLMM_F_hats(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 extern SEXP _GridLMM_GridLMM_setTest_downdate_matrix(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
+extern SEXP _GridLMM_GridLMM_SS_cisQTL(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 extern SEXP _GridLMM_GridLMM_SS_downdate_matrix(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 extern SEXP _GridLMM_GridLMM_SS_matrix(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 extern SEXP _GridLMM_GridLMM_test_setTest(SEXP, SEXP, SEXP, SEXP, SEXP);
@@ -36,6 +37,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_GridLMM_f",                               (DL_FUNC) &_GridLMM_f,                               1},
     {"_GridLMM_F_hats",                          (DL_FUNC) &_GridLMM_F_hats,                          6},
     {"_GridLMM_GridLMM_setTest_downdate_matrix", (DL_FUNC) &_GridLMM_GridLMM_setTest_downdate_matrix, 9},
+    {"_GridLMM_GridLMM_SS_cisQTL",               (DL_FUNC) &_GridLMM_GridLMM_SS_cisQTL,               8},
     {"_GridLMM_GridLMM_SS_downdate_matrix",      (DL_FUNC) &_GridLMM_GridLMM_SS_downdate_matrix,      8},
     {"_GridLMM_GridLMM_SS_matrix",               (DL_FUNC) &_GridLMM_GridLMM_SS_matrix,               6},
     {"_GridLMM_GridLMM_test_setTest",            (DL_FUNC) &_GridLMM_GridLMM_test_setTest,            5},

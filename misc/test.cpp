@@ -12,131 +12,150 @@ typedef Eigen::Map<SpMat> MSpMat;
 
 using namespace Eigen;
 
-void chol_update_R_inplace2(MatrixXd &R, MatrixXd X, VectorXd weights) {
-  int n = R.rows();
-  if(X.rows() != n) stop("Wrong dimension of X for downdating R");
-  if(weights.size() != X.cols()) stop("wrong length of weights for downdating R");
-  for(int i = 0; i < X.cols(); i++){
-    VectorXd Xi = X.col(i);
-    double weights_i = weights[i];
-    for(int k = 0; k < n; k++){
-      double R_kk = R.coeffRef(k,k);
-      double x_k = Xi.coeffRef(k);
-      double r = sqrt(R_kk*R_kk + weights_i * x_k*x_k);
-      double c = r / R_kk;
-      double s = x_k / R_kk;
-      R.coeffRef(k,k) = r;
-      if(k < (n-1)) {
-        for(int j=k+1; j<n; j++) {
-          double R_kj = R.coeffRef(k,j);
-          double X_ij = Xi.coeff(j);
-          R_kj += weights_i * s * X_ij;
-          R_kj /= c;
-          X_ij *= c;
-          X_ij -= s*R_kj;
-          R.coeffRef(k,j) = R_kj;
-          Xi.coeffRef(j) = X_ij;
-        }
-        // R.block(k,k+1,1,n-k-1) = (R.block(k,k+1,1,n-k-1) + weights_i * s * Xi.tail(n-k-1).transpose())/c;
-        // Xi.tail(n-k-1) = c*Xi.tail(n-k-1) - s*R.block(k,k+1,1,n-k-1).transpose();
-        // R.block(k,k+1,1,n-k-1) += weights_i * s * Xi.tail(n-k-1).transpose();
-        // R.block(k,k+1,1,n-k-1) /= c;
-        // Xi.tail(n-k-1) *= c;
-        // Xi.tail(n-k-1) -= s*R.block(k,k+1,1,n-k-1).transpose();
-        }
+// [[Rcpp::export()]]
+void sdi(Rcpp::List A, IntegerVector b){
+  IntegerVector a(0);
+  for(int i = 0; i < A.size(); i++) {
+    Rcout << Rf_isInteger(A[i]) << std::endl;
+    if(Rf_isInteger(A[i])) {
+      a = as<IntegerVector>(A[i]);
     }
   }
-}
-
-
-// [[Rcpp::export()]]
-MatrixXd chol_update_L2(MatrixXd L, MatrixXd X, VectorXd weights) {
-  MatrixXd R = L.transpose();
-  chol_update_R_inplace2(R,X,weights);
-  return(R.transpose());
-}
-
-// [[Rcpp::export()]]
-MatrixXd chol_update_R2(MatrixXd R, MatrixXd X, VectorXd weights) {
-  chol_update_R_inplace2(R,X,weights);
-  return(R);
-}
-
-void chol_update_L_inplace2(MatrixXd &L, MatrixXd X, VectorXd weights) {
-  int n = L.rows();
-  if(X.rows() != n) stop("Wrong dimension of X for downdating L");
-  if(weights.size() != X.cols()) stop("wrong length of weights for downdating L");
-  for(int i = 0; i < X.cols(); i++){
-    VectorXd Xi = X.col(i);
-    double weights_i = weights[i];
-    for(int k = 0; k < n; k++){
-      double L_kk = L.coeffRef(k,k);
-      double x_k = Xi.coeffRef(k);
-      double r = sqrt(L_kk*L_kk + weights_i * x_k*x_k);
-      double c = r / L_kk;
-      double s = x_k / L_kk;
-      L.coeffRef(k,k) = r;
-      if(k < (n-1)) {
-        for(int j=k+1; j<n; j++) {
-          double L_jk = L.coeffRef(j,k);
-          double X_ij = Xi.coeff(j);
-          L_jk += weights_i * s * X_ij;
-          L_jk /= c;
-          X_ij *= c;
-          X_ij -= s*L_jk;
-          L.coeffRef(j,k) = L_jk;
-          Xi.coeffRef(j) = X_ij;
-        }
-        // L.block(k+1,k,n-k-1,1) = (L.block(k+1,k,n-k-1,1) + weights_i * s * Xi.tail(n-k-1))/c;
-        // Xi.tail(n-k-1) = c*Xi.tail(n-k-1) - s*L.block(k+1,k,n-k-1,1);
-        // R.block(k,k+1,1,n-k-1) += weights_i * s * Xi.tail(n-k-1).transpose();
-        // R.block(k,k+1,1,n-k-1) /= c;
-        // Xi.tail(n-k-1) *= c;
-        // Xi.tail(n-k-1) -= s*R.block(k,k+1,1,n-k-1).transpose();
-      }
-    }
-  }
-}
-
-// [[Rcpp::export()]]
-MatrixXd chol_update_L3(MatrixXd L, MatrixXd X, VectorXd weights) {
-  chol_update_L_inplace2(L,X,weights);
-  return(L);
-}
-
-// [[Rcpp::export()]]
-MatrixXd chol_solve1(Map<MatrixXd> chol_R, Map<MatrixXd> Y){
-  return(chol_R.transpose().triangularView<Lower>().solve(Y));
-}
-// [[Rcpp::export()]]
-MatrixXd chol_solve2(Map<MatrixXd> chol_L, Map<MatrixXd> Y){
-  return(chol_L.triangularView<Lower>().solve(Y));
-}
-
-// [[Rcpp::export()]]
-MatrixXd chol_u1(Map<MatrixXd> A, VectorXd X, int times){
-  LLT<MatrixXd> lA(A);
-  MatrixXd L = lA.matrixL();
-  // VectorXd weights = VectorXd::Constant(1,1.0);
-  // for(int i = 0; i < times; i++){
-  //   chol_update_L_inplace2(L, X, weights);
+  Rcout << a << std::endl;
+  // Rcout << Rf_isInteger(a_) << std::endl;
+  // if(Rf_isInteger(a_)){
+  //   IntegerVector a = as<IntegerVector>(a_);
+  //   return(setdiff(a,b));
   // }
-  MatrixXd XX = X.replicate(1,times);
-  VectorXd weights = VectorXd::Constant(times,1.0);
-  chol_update_L_inplace2(L,XX,weights);
-  return(L);
+  // return(b);
 }
 
-// [[Rcpp::export()]]
-MatrixXd chol_u2(Map<MatrixXd> A, VectorXd X, int times){
-  LLT<MatrixXd> lA(A);
-  VectorXd weights = VectorXd::Constant(1,1.0);
-  for(int i = 0; i < times; i++){
-    lA.rankUpdate(X,1.0);
-  }
-  MatrixXd L = lA.matrixL();
-  return(L);
-}
+
+// void chol_update_R_inplace2(MatrixXd &R, MatrixXd X, VectorXd weights) {
+//   int n = R.rows();
+//   if(X.rows() != n) stop("Wrong dimension of X for downdating R");
+//   if(weights.size() != X.cols()) stop("wrong length of weights for downdating R");
+//   for(int i = 0; i < X.cols(); i++){
+//     VectorXd Xi = X.col(i);
+//     double weights_i = weights[i];
+//     for(int k = 0; k < n; k++){
+//       double R_kk = R.coeffRef(k,k);
+//       double x_k = Xi.coeffRef(k);
+//       double r = sqrt(R_kk*R_kk + weights_i * x_k*x_k);
+//       double c = r / R_kk;
+//       double s = x_k / R_kk;
+//       R.coeffRef(k,k) = r;
+//       if(k < (n-1)) {
+//         for(int j=k+1; j<n; j++) {
+//           double R_kj = R.coeffRef(k,j);
+//           double X_ij = Xi.coeff(j);
+//           R_kj += weights_i * s * X_ij;
+//           R_kj /= c;
+//           X_ij *= c;
+//           X_ij -= s*R_kj;
+//           R.coeffRef(k,j) = R_kj;
+//           Xi.coeffRef(j) = X_ij;
+//         }
+//         // R.block(k,k+1,1,n-k-1) = (R.block(k,k+1,1,n-k-1) + weights_i * s * Xi.tail(n-k-1).transpose())/c;
+//         // Xi.tail(n-k-1) = c*Xi.tail(n-k-1) - s*R.block(k,k+1,1,n-k-1).transpose();
+//         // R.block(k,k+1,1,n-k-1) += weights_i * s * Xi.tail(n-k-1).transpose();
+//         // R.block(k,k+1,1,n-k-1) /= c;
+//         // Xi.tail(n-k-1) *= c;
+//         // Xi.tail(n-k-1) -= s*R.block(k,k+1,1,n-k-1).transpose();
+//         }
+//     }
+//   }
+// }
+// 
+// 
+// // [[Rcpp::export()]]
+// MatrixXd chol_update_L2(MatrixXd L, MatrixXd X, VectorXd weights) {
+//   MatrixXd R = L.transpose();
+//   chol_update_R_inplace2(R,X,weights);
+//   return(R.transpose());
+// }
+// 
+// // [[Rcpp::export()]]
+// MatrixXd chol_update_R2(MatrixXd R, MatrixXd X, VectorXd weights) {
+//   chol_update_R_inplace2(R,X,weights);
+//   return(R);
+// }
+// 
+// void chol_update_L_inplace2(MatrixXd &L, MatrixXd X, VectorXd weights) {
+//   int n = L.rows();
+//   if(X.rows() != n) stop("Wrong dimension of X for downdating L");
+//   if(weights.size() != X.cols()) stop("wrong length of weights for downdating L");
+//   for(int i = 0; i < X.cols(); i++){
+//     VectorXd Xi = X.col(i);
+//     double weights_i = weights[i];
+//     for(int k = 0; k < n; k++){
+//       double L_kk = L.coeffRef(k,k);
+//       double x_k = Xi.coeffRef(k);
+//       double r = sqrt(L_kk*L_kk + weights_i * x_k*x_k);
+//       double c = r / L_kk;
+//       double s = x_k / L_kk;
+//       L.coeffRef(k,k) = r;
+//       if(k < (n-1)) {
+//         for(int j=k+1; j<n; j++) {
+//           double L_jk = L.coeffRef(j,k);
+//           double X_ij = Xi.coeff(j);
+//           L_jk += weights_i * s * X_ij;
+//           L_jk /= c;
+//           X_ij *= c;
+//           X_ij -= s*L_jk;
+//           L.coeffRef(j,k) = L_jk;
+//           Xi.coeffRef(j) = X_ij;
+//         }
+//         // L.block(k+1,k,n-k-1,1) = (L.block(k+1,k,n-k-1,1) + weights_i * s * Xi.tail(n-k-1))/c;
+//         // Xi.tail(n-k-1) = c*Xi.tail(n-k-1) - s*L.block(k+1,k,n-k-1,1);
+//         // R.block(k,k+1,1,n-k-1) += weights_i * s * Xi.tail(n-k-1).transpose();
+//         // R.block(k,k+1,1,n-k-1) /= c;
+//         // Xi.tail(n-k-1) *= c;
+//         // Xi.tail(n-k-1) -= s*R.block(k,k+1,1,n-k-1).transpose();
+//       }
+//     }
+//   }
+// }
+// 
+// // [[Rcpp::export()]]
+// MatrixXd chol_update_L3(MatrixXd L, MatrixXd X, VectorXd weights) {
+//   chol_update_L_inplace2(L,X,weights);
+//   return(L);
+// }
+// 
+// // [[Rcpp::export()]]
+// MatrixXd chol_solve1(Map<MatrixXd> chol_R, Map<MatrixXd> Y){
+//   return(chol_R.transpose().triangularView<Lower>().solve(Y));
+// }
+// // [[Rcpp::export()]]
+// MatrixXd chol_solve2(Map<MatrixXd> chol_L, Map<MatrixXd> Y){
+//   return(chol_L.triangularView<Lower>().solve(Y));
+// }
+// 
+// // [[Rcpp::export()]]
+// MatrixXd chol_u1(Map<MatrixXd> A, VectorXd X, int times){
+//   LLT<MatrixXd> lA(A);
+//   MatrixXd L = lA.matrixL();
+//   // VectorXd weights = VectorXd::Constant(1,1.0);
+//   // for(int i = 0; i < times; i++){
+//   //   chol_update_L_inplace2(L, X, weights);
+//   // }
+//   MatrixXd XX = X.replicate(1,times);
+//   VectorXd weights = VectorXd::Constant(times,1.0);
+//   chol_update_L_inplace2(L,XX,weights);
+//   return(L);
+// }
+// 
+// // [[Rcpp::export()]]
+// MatrixXd chol_u2(Map<MatrixXd> A, VectorXd X, int times){
+//   LLT<MatrixXd> lA(A);
+//   VectorXd weights = VectorXd::Constant(1,1.0);
+//   for(int i = 0; i < times; i++){
+//     lA.rankUpdate(X,1.0);
+//   }
+//   MatrixXd L = lA.matrixL();
+//   return(L);
+// }
 // 
 // Rcpp::List chol_cT(Map<MatrixXd> A){
 //   LLT<MatrixXd> lA(A);

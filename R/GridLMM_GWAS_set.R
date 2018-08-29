@@ -258,9 +258,9 @@ run_GridLMM_GWAS_set = function(Y,X_cov,X,set_matrix,inv_prior_X = NULL,X_map = 
 
   if(is.null(inv_prior_X)) {
     if(method == 'BF') stop("Can't calculate Bayes Factors with impropper prior on X")
-    inv_prior_X = rep(0,ncol(X_cov)+length(X_list_full))
+    inv_prior_X = rep(0,ncol(X_cov))
   }
-  if(!length(inv_prior_X) == (ncol(X_cov)+length(X_list_full))) stop("Wrong length of inv_prior_X")
+  if(!length(inv_prior_X) == (ncol(X_cov))) stop("Wrong length of inv_prior_X")
 
 
   # -------- rotate data ---------- #
@@ -290,7 +290,7 @@ run_GridLMM_GWAS_set = function(Y,X_cov,X,set_matrix,inv_prior_X = NULL,X_map = 
   # evaluate likelihoods on a grid, going until all LL's stop increasing
 
   results = fit_GridLMM_GWAS_set(Y,X_cov,X,set_matrix,h2_start,h2_step,V_setup,inv_prior_X,target_prob,proximal_markers,proximal_Xs,method,verbose,mc.cores)
-
+  
   # Do tests
   # if(method == 'REML') {
   #   F_hat_cols = colnames(results)[grep('F.',colnames(results),fixed=T)]
@@ -306,7 +306,7 @@ run_GridLMM_GWAS_set = function(Y,X_cov,X,set_matrix,inv_prior_X = NULL,X_map = 
   if(is.null(proximal_Xs) || !is.list(proximal_Xs)) {
     if(!is.list(proximal_Xs)) {
       proximal_Xs_new = list()
-      proximal_Xs_new[proximal_Xs] = X
+      proximal_Xs_new[[proximal_Xs]] = X
       proximal_Xs = proximal_Xs_new
       rm(X)
       gc()
@@ -365,6 +365,7 @@ fit_GridLMM_GWAS_set = function(Y,X_cov,X,set_matrix,h2_start,h2_step,V_setup,in
   # Only tests where the LL increases in one circle are re-tested in the next.
   # continues until the grid is fully covered, or no tests increase in LL
   Y = as.matrix(Y)
+  n = nrow(Y)
   storage.mode(Y) = 'double'
   if(is.null(colnames(Y))) colnames(Y) = 1:ncol(Y)
   
@@ -394,6 +395,7 @@ fit_GridLMM_GWAS_set = function(Y,X_cov,X,set_matrix,h2_start,h2_step,V_setup,in
 
   null_model = FALSE
   if(is.null(X)) {
+    X = matrix(0,n,0)
     if(is.null(proximal_markers)) {
       null_model = TRUE
       stop("model without proximal_markers not implemented. Can be an empty list of length == nrow(set_matrix)")
@@ -477,7 +479,7 @@ fit_GridLMM_GWAS_set = function(Y,X_cov,X,set_matrix,h2_start,h2_step,V_setup,in
         if(is.list(proximal_Xs)){
           downdate_Xs = build_downdate_Xs(1:length(proximal_Xs),proximal_Xs,proximal_markers,active_set_matrix[,1])
         } else{
-          downdate_Xs = build_downdate_Xs(proximal_Xs,X_list,proximal_markers,active_set_matrix[,1])
+          downdate_Xs = build_downdate_Xs(proximal_Xs,list(X),proximal_markers,active_set_matrix[,1])
         }
       }
 
@@ -529,15 +531,17 @@ fit_GridLMM_GWAS_set = function(Y,X_cov,X,set_matrix,h2_start,h2_step,V_setup,in
 }
 
 
-calc_LL = function(Y,X_cov,X,h2s,chol_Vi,inv_prior_X,
+calc_LL_set = function(Y,X_cov,X,h2s,chol_Vi,inv_prior_X,
                    downdate_Xs = NULL,n_SNPs_downdated_RRM = NULL,REML = TRUE, BF = TRUE,active_set_matrix){  
   
+  m = ncol(Y)
+  n = nrow(Y)
   if(is.null(downdate_Xs)) {
     stop("no downdate_Xs not implemented")
     # SSs <- GridLMM_SS_matrix(Y,chol_Vi,X_cov,X_list,active_X_list,inv_prior_X)
   } else{
     downdate_weights = h2s/unlist(n_SNPs_downdated_RRM)
-    if(length(downdate_weights) != length(downdate_Xs[[active_X_list[[1]]]]$downdate_Xi)) stop("Wrong length of downdate weights")
+    if(length(downdate_weights) != length(downdate_Xs[[active_set_matrix[1,1]]]$downdate_Xi)) stop("Wrong length of downdate weights")
     chol_Vi = as.matrix(chol_Vi)
     SSs <- GridLMM_setTest_downdate_matrix(Y,chol_Vi,X_cov,X,active_set_matrix,downdate_Xs,downdate_weights,inv_prior_X);
   }
@@ -550,31 +554,31 @@ calc_LL = function(Y,X_cov,X,h2s,chol_Vi,inv_prior_X,
   
   # p = max(1,max(ncol(X_list[[1]]),length(downdate_weights_i)))*m
   # ML_h2 = as.matrix(t(h2s))[rep(1,p),,drop=FALSE]
-  n_tests = nrow(log_LL$ML)
+  n_tests = length(log_LL$REML)
   if(is.null(n_tests)) n_tests = 1
   p = n_tests*m
-  ML_h2 = as.matrix(t(h2s))[rep(1,p),,drop=FALSE]
-  colnames(ML_h2) = paste(colnames(ML_h2),'ML',sep='.')
+  # ML_h2 = as.matrix(t(h2s))[rep(1,p),,drop=FALSE]
+  # colnames(ML_h2) = paste(colnames(ML_h2),'ML',sep='.')
   
   results_i = data.frame(Trait = rep(colnames(Y),each = n_tests),
                          X_ID = NA,
                          # ML_logLik = c(log_LL$ML),
                          # ML_h2,
                          stringsAsFactors = F)
-  if(length(active_X_list) == n_tests) {
-    if(length(X_list) > 0) {
-      results_i$X_ID = colnames(X_list[[1]])[active_X_list]
+  if(nrow(active_set_matrix) == n_tests) {
+    if(ncol(X)>0) {
+      results_i$X_ID = colnames(X)[active_set_matrix[,1]]
     } else {
-      results_i$X_ID = names(downdate_Xs)[active_X_list]
+      results_i$X_ID = names(downdate_Xs)[active_set_matrix[,1]]
     }
   } else{
     results_i$X_ID = 'NULL'
   }
   
   b_cov = ncol(X_cov)
-  b_x = length(X_list)
-  if(length(X_list) == 0) b_x = 0
-  b = b_cov + b_x
+  # b_x = length(X_list)
+  # if(length(X_list) == 0) b_x = 0
+  b = b_cov
   # if(ncol(X_list[[1]]) == n_tests) {
   # beta_hats = do.call(rbind,lapply(1:m,function(i) t(log_LL$beta_hat[(i-1)*b + b_cov + 1:b_x,,drop=FALSE])))
   beta_hats = do.call(rbind,lapply(1:m,function(i) t(log_LL$beta_hat[(i-1)*b + 1:b,,drop=FALSE])))
@@ -585,7 +589,7 @@ calc_LL = function(Y,X_cov,X,h2s,chol_Vi,inv_prior_X,
   # if(REML) {
     REML_h2 = as.matrix(t(h2s))[rep(1,p),,drop=FALSE]
     colnames(REML_h2) = paste(colnames(REML_h2),'REML',sep='.')
-    results_i = data.frame(results_i,REML_logLik = c(log_LL$REML),REML_h2)
+    results_i = data.frame(results_i,REML_logLik = c(log_LL$REML),REML_h2,Tau = log_LL$tau)
     # if(b_x > 0) {
     #   F_hats = do.call(rbind,lapply(1:m,function(i) t(log_LL$F_hat[(i-1)*b + b_cov + 1:b_x,,drop=FALSE])))
     #   colnames(F_hats) = paste('F',1:ncol(F_hats),sep='.')
