@@ -823,23 +823,30 @@ combine_LDAK_Kinships = function(K_list, file = 'K.list') {
   return(file)
 }
 
-get_h2_LDAK = function(y,X_cov,K_list,LDAK_program,weights = rep(1,length(K_list))){
+prep_h2_LDAK = function(y,X_cov,K_list,LDAK_program, maxiter = 1000){
   ID = data.table::fread(paste0(K_list[1],'.grm.id'),data.table = F,h=F)[,1:2]
   write.table(cbind(ID,y),file = 'phen.txt',row.names=F,col.names=F,quote=F)
   if(all(X_cov[,1] == 1)) X_cov = X_cov[,-1,drop=FALSE]
   write.table(cbind(ID,X_cov),file = 'cov.txt',row.names=F,col.names=F,quote=F)
   combine_LDAK_Kinships(K_list, file = 'K.list')
   if(ncol(X_cov) > 0) {
-    system(sprintf('%s --reml h2_LDAK --pheno phen.txt --covar cov.txt --mgrm K.list --kinship-details NO',LDAK_program))
+    return(sprintf('%s --reml h2_LDAK --pheno phen.txt --covar cov.txt --mgrm K.list --kinship-details NO --constrain YES --reml-iter %d',LDAK_program,maxiter))
   } else{
-    system(sprintf('%s --reml h2_LDAK --pheno phen.txt --mgrm K.list --kinship-details NO',LDAK_program))
+    return(sprintf('%s --reml h2_LDAK --pheno phen.txt --mgrm K.list --kinship-details NO --constrain YES --reml-iter %d',LDAK_program,maxiter))
   }
+}
+get_LDAK_result = function(K_list,weights = rep(1,length(K_list))){
   ldak_results = fread('h2_LDAK.vars',data.table = F)
   ldak_results$Variance[-nrow(ldak_results)] = ldak_results$Variance[-nrow(ldak_results)]/weights
   h2_LDAK = matrix(ldak_results$Variance[-nrow(ldak_results)]/sum(ldak_results$Variance),nr=1)
   colnames(h2_LDAK) = names(K_list)
   rownames(h2_LDAK) = NULL
   h2_LDAK
+}
+get_h2_LDAK = function(y,X_cov,K_list,LDAK_program,weights = rep(1,length(K_list)), maxiter = 1000){
+  LDAK_call = prep_h2_LDAK(y,X_cov,K_list,LDAK_program,maxiter)
+  system(LDAK_call)
+  get_LDAK_result(K_list,weights)
 }
 
 
