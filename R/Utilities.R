@@ -583,6 +583,9 @@ calc_LL = function(Y,X_cov,X_list,h2s,chol_Vi,inv_prior_X,
     SSs <- GridLMM_SS_matrix(Y,chol_Vi,X_cov,X_list,active_X_list,inv_prior_X)
   } else{
     downdate_weights = h2s/unlist(n_SNPs_downdated_RRM)
+    # the length of downdate_Xi determines how many K's get downdated
+    # this means that h2s has to be ordered such that the downdated K's are first and in the correct order
+    downdate_weights = downdate_weights[1:length(downdate_Xs[[active_X_list[[1]]]]$downdate_Xi)] 
     if(length(downdate_weights) != length(downdate_Xs[[active_X_list[[1]]]]$downdate_Xi)) stop("Wrong length of downdate weights")
     chol_Vi = as.matrix(chol_Vi)
     SSs <- GridLMM_SS_downdate_matrix(Y,chol_Vi,X_cov,X_list,active_X_list,downdate_Xs,downdate_weights,inv_prior_X);
