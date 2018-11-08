@@ -815,7 +815,7 @@ prep_LDAK_Kinship = function(K,kinfile,LDAK_program = 'LDAK/ldak5') {
   # data.table::fwrite(data.frame(as.matrix(K)),file = 'temp.grm.raw',row.names=F,col.names=F,quote=F)
   write.table(as.matrix(K),file = 'temp.grm.raw',row.names=F,col.names=F,quote=F)
   write.table(cbind(rownames(K),rownames(K)),file = 'temp.grm.id',row.names=F,col.names=F,quote=F)
-  system(sprintf('%s --convert-raw %s --grm temp',LDAK_program,kinfile))
+  system(sprintf('./%s --convert-raw %s --grm temp',LDAK_program,kinfile))
   system(sprintf('rm temp.grm.*',kinfile))
   return(kinfile)
 }
@@ -833,9 +833,9 @@ prep_h2_LDAK = function(y,X_cov,K_list,LDAK_program, maxiter = 1000){
   write.table(cbind(ID,X_cov),file = 'cov.txt',row.names=F,col.names=F,quote=F)
   combine_LDAK_Kinships(K_list, file = 'K.list')
   if(ncol(X_cov) > 0) {
-    return(sprintf('%s --reml h2_LDAK --pheno phen.txt --covar cov.txt --mgrm K.list --kinship-details NO --constrain YES --reml-iter %d',LDAK_program,maxiter))
+    return(sprintf('./%s --reml h2_LDAK --pheno phen.txt --covar cov.txt --mgrm K.list --kinship-details NO --constrain YES --reml-iter %d',LDAK_program,maxiter))
   } else{
-    return(sprintf('%s --reml h2_LDAK --pheno phen.txt --mgrm K.list --kinship-details NO --constrain YES --reml-iter %d',LDAK_program,maxiter))
+    return(sprintf('./%s --reml h2_LDAK --pheno phen.txt --mgrm K.list --kinship-details NO --constrain YES --reml-iter %d',LDAK_program,maxiter))
   }
 }
 get_LDAK_result = function(K_list,weights = rep(1,length(K_list))){
@@ -850,6 +850,19 @@ get_h2_LDAK = function(y,X_cov,K_list,LDAK_program,weights = rep(1,length(K_list
   LDAK_call = prep_h2_LDAK(y,X_cov,K_list,LDAK_program,maxiter)
   system(LDAK_call)
   get_LDAK_result(K_list,weights)
+}
+
+time_LDAK = function(y,X_cov,K_list,LDAK_program){
+  times = c()
+  for(iters in c(0,1,2,4,6,10,1000)){
+    LDAK_call = prep_h2_LDAK(y,X_cov,K_list,LDAK_program,iters)
+    # LDAK_call = paste(LDAK_call,'--tolerance 0.000000001')
+    time_i = system.time({system(LDAK_call)})
+    res = fread('h2_LDAK.progress')
+    n_iter = nrow(res)
+    times = rbind(times,data.frame(n_iter = n_iter,time = time_i[3]))
+  }
+  times
 }
 
 
