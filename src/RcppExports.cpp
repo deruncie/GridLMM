@@ -25,6 +25,17 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// LDLt
+List LDLt(SEXP A_);
+RcppExport SEXP _GridLMM_LDLt(SEXP A_SEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type A_(A_SEXP);
+    rcpp_result_gen = Rcpp::wrap(LDLt(A_));
+    return rcpp_result_gen;
+END_RCPP
+}
 // svd_c
 Rcpp::List svd_c(Map<MatrixXd> X);
 RcppExport SEXP _GridLMM_svd_c(SEXP XSEXP) {

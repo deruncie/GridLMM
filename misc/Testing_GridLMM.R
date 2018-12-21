@@ -1,8 +1,8 @@
 library(GridLMM)
-
+library(microbenchmark)
 set.seed(1)
 # simulation with 1 RE, n=100
-n = 4000
+n = 400
 nG = 20
 data = data.frame(Group = factor(rep(1:nG,each = n/nG)),cov = sample(c(-1,1),n,replace=T)) # cov is a covariate for all tests
 
@@ -75,15 +75,20 @@ data$y = y
 
 
 
-g0 = GridLMM_ML(y~cov+(1|Group),data,relmat = list(Group = tcrossprod(scale_SNPs(Xg,scaleX = F))/p))
+g0 = GridLMM_ML(y~cov+(1+cov|Group),data,relmat = list(Group = tcrossprod(scale_SNPs(Xg,scaleX = F))/p))
 g0$results
 g0 = GridLMM_ML(y~cov+(1|ID),data,relmat = list(ID = K))
 g0$results
 
 g1 = GridLMM_GWAS(y~cov + (1|Group) + (0+cov|Group),~1,~0,data = data,X = Xg,X_ID = 'Group',
                   # h2_start = c(0.9,0.1),
-                  algorithm = 'Full',
+                  # algorithm = 'Full',
                   h2_step = 0.1, save_V_folder = 'V_folder',mc.cores=1)
+g1b = GridLMM_GWAS(y~cov + (1+cov|Group),~1,~0,data = data,X = Xg,X_ID = 'Group',
+                  # h2_start = c(0.9,0.1),
+                  # algorithm = 'Full',
+                  h2_step = 0.1, save_V_folder = 'V_folder',mc.cores=1)
+
 proximal_markers = lapply(1:p,function(x) seq(max(1,x-10),min(p,x+10)))
 proximal_markers[-c(1:2)] = lapply(proximal_markers[-c(1:2)],function(x) x[x>2])
 g2 = GridLMM_GWAS(y~cov + (1|Group),~1,~0,data = data,X = Xg,X_ID = 'Group',h2_step = 0.1,mc.cores=1,algorithm = 'Full',

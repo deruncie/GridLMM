@@ -27,6 +27,7 @@ prepMM = function(formula,data,weights = NULL,other_formulas = NULL,
       RE_levels[[re]] = rownames(relmat[[re]])
     }
   }
+  # if K's have rownames that are not in data, add these levels to data's columns
   for(re in names(RE_levels)){
     if(!re %in% colnames(data)) stop(sprintf('Column "%s" required in data',re))
     data[[re]] = as.factor(data[[re]]) # ensure 'data[[re]]' is a factor
@@ -36,6 +37,15 @@ prepMM = function(formula,data,weights = NULL,other_formulas = NULL,
   if(!is.null(X_ID)) {
     if(!X_ID %in% colnames(data)) stop(sprintf('X_ID column %s not in data',X_ID))
     data[[X_ID]] = as.factor(data[[X_ID]])
+    if(!X_ID %in% names(relmat)) {
+      # create a kinship matrix based on X
+      p = ncol(X)
+      K = tcrossprod(X)/p
+      relmat[[X_ID]] = list(
+        K = K,
+        p = p
+      )
+    }
     # if(is.null(rownames(X)) || !all(data[[X_ID]] %in% rownames(X))) stop('X must have rownames and all levels of data[[X_ID]] must be in rownames(X)')
   }
   
@@ -43,217 +53,99 @@ prepMM = function(formula,data,weights = NULL,other_formulas = NULL,
   lmod <- lme4::lFormula(formula,data=data,weights=weights,
                          control = lme4::lmerControl(check.nobs.vs.nlev = 'ignore',check.nobs.vs.nRE = 'ignore'))
   
+  reTrms = lmod$reTrms
+  fr = lmod$fr
+  
   # Add in other variables from data
   for(term in extra_terms) {
-    if(term %in% colnames(lmod$fr) == F) lmod$fr[[term]] = data[match(rownames(lmod$fr),rownames(data)),term]
+    if(term %in% colnames(fr) == F) fr[[term]] = data[match(rownames(fr),rownames(data)),term]
   }
   
-  # compute RE_setup
-  RE_terms = lmod$reTrms
   
-  # if(!is.null(X_ID) && !X_ID %in% names(RE_terms$cnms)) warning(sprintf("No covariance given SNPs specified in error formula. To specify, add a term like (1|%s)",X_ID))
+  # go through random effects and add in LDLt of K
+  RE_names = names(reTrms$cnms)
   
-  if(is.null(V_setup)) {
-    # construct the RE_setup list
-    # contains:
-    # Z: n x r design matrix
-    # K: r x r PSD covariance matrix
-    RE_setup = list()
-    for(i in 1:length(RE_terms$cnms)){
-      term = names(RE_terms$cnms)[i]
-      n_factors = length(RE_terms$cnms[[i]])  # number of factors for this grouping factor
-      
-      # extract combined Z matrix
-      combined_Zt = RE_terms$Ztlist[[i]]
-      Zs_term = tapply(1:nrow(combined_Zt),gl(n_factors,1,nrow(combined_Zt),labels = RE_terms$cnms[[i]]),function(x) Matrix::t(combined_Zt[x,,drop=FALSE]))
-      
-      # extract K from relmat. If missing, assign to NULL
-      K = NULL
-      p = NULL
-      p_test = NULL
-      if(term %in% names(relmat)) {
-        if(is.list(relmat[[term]])){
-          if(verbose && !is.null(proximal_markers)) print('Note: X should be centered and scaled as it was for calculating RRM')
-          K = relmat[[term]]$K
-          p = relmat[[term]]$p
-          p_test = relmat[[term]]$p_test
-        } else{
-          K = relmat[[term]]
-        }
-      } else if(!is.null(X_ID) && term == X_ID && !is.null(X)) {
-        if(verbose) print('making RRM matrix')
-        p = ncol(X)
-        K = tcrossprod(X)/p
-        relmat[[term]] = K
-      } 
-      
-      if(term == X_ID && !is.null(proximal_markers) && is.null(p_test)){
-        p_test = mean(lengths(proximal_markers))
-      }
-      
-      if(!is.null(K)) {
-        if(!all(colnames(Zs_term[[1]]) %in% rownames(K))) stop('rownames of K not lining up with Z')
-        K = K[colnames(Zs_term[[1]]),colnames(Zs_term[[1]])]
+  reTrms$p = list()
+  reTrms$p_test = list()
+  for(i in 1:length(RE_names)) {
+    re = RE_names[[i]]
+    # pull out K
+    # calculate K = LDLt
+    # modify Z to Z %*% (LD^(1/2) \otimes I_r) where r is the number of components for re
+    if(re %in% names(relmat)) {
+      if(is.list(relmat[[re]])) {
+        K = relmat[[re]]$K
+        reTrms$p[[re]] = relmat[[re]]$p
+        reTrms$p_test[[re]] = relmat[[re]]$p_test
       } else {
-        K = Diagonal(ncol(Zs_term[[1]]),1)
-        rownames(K) = colnames(K) = colnames(Zs_term[[1]])
+        K = relmat[[re]]
       }
+      if(!all(levels(reTrms$flist[[re]]) %in% rownames(K))) stop(sprintf('levels of random effect %s missing from K',re))
+      colnames(K) = rownames(K)
+      K = K[levels(reTrms$flist[[re]]),levels(reTrms$flist[[re]])]
+      K = as.matrix(K)
+      ldl_k = LDLt(K)
+      L = t(ldl_k$P) %*% ldl_k$L %*% diag(sqrt(ldl_k$d))
       
-      
-      # make an entry in RE_setup for each random effect
-      for(j in 1:n_factors){
-        # name of variance component
-        name = term
-        if(n_factors > 1) name = paste(name,RE_terms$cnms[[i]][[j]],sep='.')
-        while(name %in% names(RE_setup)) name = paste0(name,'.1') # hack for when same RE used multiple times
-        
-        # Z matrix
-        Z = as(Zs_term[[j]],'dgCMatrix')
-        
-        
-        RE_setup[[name]] = list(
-          term = term,
-          Z = Z,
-          K = K,
-          p = p,
-          p_test = p_test
-        )
-      }
-      
-      # add names to RE_setup if needed
-      n_RE = length(RE_setup)
-      for(i in 1:n_RE){
-        if(is.null(names(RE_setup)[i]) || names(RE_setup)[i] == ''){
-          names(RE_setup)[i] = paste0('RE.',i)
-        }
-      }
-      
-    }  
-    V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K = TRUE,drop0_tol = 1e-10,save_V_folder,verbose)
-  } else{
-    RE_setup = V_setup$RE_setup
-  }
-  
-  return(list(lmod = lmod, RE_setup = RE_setup, V_setup = V_setup))
-}
-
-make_V_setup = function(RE_setup,
-                        weights = NULL,
-                        diagonalize = TRUE,
-                        svd_K = TRUE, # should the svd of one of the random effect covariances be calculated?
-                        drop0_tol = 1e-10, # tolerance for setting a value to zero in a sparse matrix
-                        save_V_folder = NULL, # if NULL, V decompositions will not be saved. Otherwise, a string giving the folder to save to. This folder will be cleared of all existing V_decompositions
-                        verbose = T
-){
-  # either returns a folder containing 1) each chol_V file (containing a chol_V, h2_index, and V_log_det) and a chol_Vi_inv_setup file, 2) the h2s_matrix, and 3) the Qt matrix
-  # or, a list containing these three items in memory
-  
-  # ------------------------------------ #
-  # ---- Check RE_setup ---------------- #
-  # ------------------------------------ #
-  
-  # ensure both Z and K are provided for each random effect
-  for(re in seq_along(RE_setup)){
-    RE_setup[[re]] = within(RE_setup[[re]],{
-      if(!'Z' %in% ls()){
-        Z = diag(1,nrow(K))
-      }
-      if(!'K' %in% ls()){
-        K = diag(1,ncol(Z))
-      }
-    })
-  }
-  n_RE = length(RE_setup)
-  RE_names = names(RE_setup)
-  
-  
-  # ------------------------------------ #
-  # ---- Check weights ----------------- #
-  # ------------------------------------ #
-  
-  n = nrow(RE_setup[[1]]$Z)
-  if(is.null(weights)) weights = rep(1,n)
-  if(length(weights) != n) stop('weights must have same length as data')
-  
-  
-  # ------------------------------------ #
-  # ---- Calculate Qt ------------------ #
-  # ------------------------------------ #
-  
-  if(n_RE == 1 && diagonalize == TRUE && all(weights == 1)){
-    # only useful if n_RE == 1 and there are no weights
-    # it is possible to do this with weights: premultiply Z by diag(sqrt(weights)) below, then set Q = t(U) %*% diag(sqrt(weights)), then adjust log_LL's by sum(log(weights))/2
-    # but this is not currently implemented.
-    Z = RE_setup[[1]]$Z
-    if(svd_K == TRUE && nrow(RE_setup[[1]]$K) < nrow(Z)) {
-      # a faster way of taking the SVD of ZKZt, particularly if ncol(Z) < nrow(Z). Probably no benefit if ncol(K) > nrow(Z)
-      svd_K1 = svd(RE_setup[[1]]$K)
-      qr_ZU = qr(Z %*% svd_K1$u)
-      R_ZU = drop0(qr.R(qr_ZU,complete=F),tol=drop0_tol)
-      Q_ZU = drop0(qr.Q(qr_ZU,complete=T),tol=drop0_tol)
-      RKRt = R_ZU %*% diag(svd_K1$d) %*% t(R_ZU)
-      svd_RKRt = svd(RKRt)
-      RKRt_U = svd_RKRt$u
-      if(ncol(Q_ZU) > ncol(RKRt_U)) RKRt_U = bdiag(RKRt_U,diag(1,ncol(Q_ZU)-ncol(RKRt_U)))
-      Qt = t(Q_ZU %*% RKRt_U)
-    } else{
-      ZKZt = Z %*% RE_setup[[1]]$K %*% t(Z)
-      if(inherits(ZKZt,'Matrix') && length(ZKZt@x) > ncol(ZKZt)^2/2) ZKZt = as.matrix(ZKZt)
-      if(inherits(ZKZt,'Matrix')) {
-        result = svd(ZKZt)
-      } else{
-        result = svd_c(ZKZt)
-      }
-      Qt = t(result$u)
+      Zt_rows = seq(reTrms$Gp[i]+1,reTrms$Gp[i+1])
+      n_cpts = length(reTrms$cnms[[re]])
+      reTrms$Zt[Zt_rows,] = kronecker(t(L),Diagonal(n_cpts,1)) %*% reTrms$Zt[Zt_rows,]
     }
-    # Qt = as(drop0(as(Qt,'dgCMatrix'),tol = drop0_tol),'dgCMatrix')
-    QtZ_matrices = lapply(RE_setup,function(re) Qt %*% re$Z)
+  }
+  
+  # decide which parameters are variances and which are covariances
+  reTrms$h2_names = c()
+  reTrms$is_var = rep(TRUE,length(reTrms$theta))  # TRUE = variance, FALSE = covariance
+  reTrms$Tp = c(`beg__` = 0)
+  reTrms$Tlist = list()
+  theta_index = 0
+  for(re in RE_names){
+    n_cpts = length(reTrms$cnms[[re]])
+    VarCor_mat = matrix(0,n_cpts,n_cpts)
+    diag(VarCor_mat) = 1
+    reTrms$Tlist[[re]] = VarCor_mat
+    thetas = VarCor_mat[lower.tri(VarCor_mat,diag = TRUE)]
+    reTrms$is_var[theta_index + 1:length(thetas)][thetas == 0] = FALSE
+    theta_index = theta_index + length(thetas)
+    reTrms$Tp = c(reTrms$Tp,theta_index)
+    reTrms$h2_names = c(reTrms$h2_names,paste(re,1:length(thetas),sep='.'))
+  }
+  names(reTrms$Tp)[-1] = RE_names
+  
+  # diagonalize if possible
+  if(length(reTrms$theta) == 1 && diagonalize == TRUE && all(weights == 1)){
+    # only useful if n_RE == 1 and there are no weights
+    
+    sZ = svd(t(reTrms$Zt),nu = ncol(reTrms$Zt))
+    
+    Qt = t(sZ$u)
+    reTrms$Zt = reTrms$Zt %*% t(Qt)
   } else{
     Qt = NULL
-    QtZ_matrices = lapply(RE_setup,function(re) re$Z)
   }
-  QtZ = do.call(cbind,QtZ_matrices[RE_names])
-  # QtZ = as(QtZ,'dgCMatrix')
-  
-  # ------------------------------------ #
-  # ---- Calculate ZKZts --------------- #
-  # ------------------------------------ #
-  ZKZts = list()
-  for(re in RE_names) {
-    # ZKZts[[re]] = as(forceSymmetric(drop0(QtZ_matrices[[re]] %*% RE_setup[[re]]$K %*% t(QtZ_matrices[[re]]),tol = drop0_tol)),'dgCMatrix')
-    # ZKZts[[re]] = forceSymmetric(drop0(QtZ_matrices[[re]] %*% RE_setup[[re]]$K %*% t(QtZ_matrices[[re]]),tol = drop0_tol))
-    # ZKZts[[re]] = as.matrix(forceSymmetric(drop0(QtZ_matrices[[re]] %*% RE_setup[[re]]$K %*% t(QtZ_matrices[[re]]),tol = drop0_tol)))
-    ZKZts[[re]] = QtZ_matrices[[re]] %*% RE_setup[[re]]$K %*% t(QtZ_matrices[[re]])
-  }
+  reTrms$Qt = Qt
   
   
-  # ------------------------------------ #
-  # ---- Prepare setup ------------------ #
-  # ------------------------------------ #
-  setup = list(
-    RE_setup = RE_setup,
-    Qt = Qt,
-    ZKZts = ZKZts,
-    resid_V = diag(1/weights),
-    save_V_folder = save_V_folder
-  )
+  lmod$reTrms = reTrms
+  lmod$fr = fr
+  lmod$save_V_folder = save_V_folder
   
   # ------------------------------------ #
   # ---- Prep for downdating ----------- #
   # ------------------------------------ #
-  setup = set_p_test(setup)
+  lmod = set_p_test(lmod)
   
   # ------------------------------------ #
   # ---- Prep folder to save V files --- #
   # ------------------------------------ #
-  clean_V_folder(setup)
+  clean_V_folder(lmod)
   
-  return(setup)
+  return(lmod)
 }
 
 clean_V_folder = function(V_setup) {
   save_V_folder = V_setup$save_V_folder
-  RE_names = names(V_setup$RE_setup)
+  RE_names = V_setup$reTrms$h2_names
   if(!is.null(save_V_folder) & is.character(save_V_folder)){
     try(dir.create(save_V_folder,showWarnings = FALSE),silent = TRUE)
     # clean up existing files
@@ -280,32 +172,32 @@ clean_V_folder = function(V_setup) {
 #' @return The modified \code{V_setup} list
 #' @export
 set_p_test = function(V_setup,p_test = NULL, p = NULL){
-  RE_setup = V_setup$RE_setup
+  reTrms = V_setup$reTrms
   if(!is.null(p)) {
     for(re in names(p)){
-      if(!re %in% names(RE_setup)) stop(sprintf('Random effect %s not in V_setup',re))
-      RE_setup[[re]]$p = p[[re]]
+      if(!re %in% names(reTrms$p)) stop(sprintf('Random effect %s not in V_setup',re))
+      reTrms$p[[re]] = p[[re]]
     }
   }
   if(!is.null(p_test)) {
     for(re in names(p_test)){
-      RE_setup[[re]]$p_test = p_test[[re]]
+      reTrms$p_test[[re]] = p_test[[re]]
     }
   }
   # in preparation for down-dating, multiply each ZKZt by p/(p-pj), where p is the number of SNPs that went into the RRM, and pj is the (mean) number of SNPs per down-date operation
   downdate_ratios = c()
   n_SNPs_downdated_RRM = c()
-  for(re in names(RE_setup)) {
-    if(is.null(RE_setup[[re]]$p)) {
+  for(re in names(reTrms$cnms)) {
+    if(is.null(reTrms$p[[re]])) {
       downdate_ratios[re] = 1
       n_SNPs_downdated_RRM[re] = Inf
     } else {
-      if(is.null(RE_setup[[re]]$p_test)) RE_setup[[re]]$p_test = 0 # assume p_test == 0 if not provided
-      n_SNPs_downdated_RRM[re] = RE_setup[[re]]$p - RE_setup[[re]]$p_test
-      downdate_ratios[re] = RE_setup[[re]]$p/n_SNPs_downdated_RRM[re]
+      if(is.null(reTrms$p_test[[re]])) reTrms$p_test[[re]] = 0 # assume p_test == 0 if not provided
+      n_SNPs_downdated_RRM[re] = reTrms$p[[re]] - reTrms$p_test[[re]]
+      downdate_ratios[re] = reTrms$p[[re]]/n_SNPs_downdated_RRM[re]
     }
   }
-  V_setup$RE_setup = RE_setup
+  V_setup$reTrms = reTrms
   V_setup$n_SNPs_downdated_RRM = n_SNPs_downdated_RRM
   V_setup$downdate_ratios = downdate_ratios
   
@@ -330,8 +222,42 @@ make_chol_V_setup = function(V_setup,h2s){
     }
   }
   downdate_ratios = V_setup$downdate_ratios
-  V = (1-sum(h2s)) * V_setup$resid_V
-  for(i in 1:length(h2s)) V = V + h2s[i] * as.matrix(V_setup$ZKZts[[i]]) * downdate_ratios[i]
+  reTrms = V_setup$reTrms
+  RE_names = names(reTrms$cnms)
+  
+  theta = c()
+  for(i in 1:length(RE_names)) {
+    re = RE_names[i]
+    re_h2s = seq(reTrms$Tp[i]+1,reTrms$Tp[i+1])
+    vcov = reTrms$Tlist[[re]]
+    is_cov = !reTrms$is_var[re_h2s] # which are correlations
+    if(nrow(vcov) > 1) {
+      # there are cov parameters
+      # build correlation matrix
+      # vcov[lower.tri(vcov,diag = TRUE)][is_cov] = -1 + 2*h2s[re_h2s][is_cov] # map h2s (0,1) to correlations (-1,1)
+      vcov[lower.tri(vcov,diag = TRUE)][is_cov] = h2s[re_h2s][is_cov]
+      vcov[upper.tri(vcov)] = vcov[lower.tri(vcov)]
+    }
+    # convert to covariance matrix by multiplying by variances
+    vars = h2s[re_h2s][!is_cov]
+    vars = exp(log(vars + 1e-5)) # protect against boundary
+    vcov = diag(sqrt(vars),sum(!is_cov)) %*% vcov %*% diag(sqrt(vars),sum(!is_cov))
+    
+    # take cholesky LLt, and then save the lower triangle as part of theta
+    L_vcov = t(chol(vcov,pivot = FALSE))
+    theta = c(theta,L_vcov[lower.tri(L_vcov,diag = T)])
+  }
+  
+  # insert theta into Lambdat
+  Lambdat = reTrms$Lambdat
+  Lambdat@x = theta[reTrms$Lind]
+  
+  # find weights
+  weights = rep(1,nrow(V_setup$fr))
+  if('(weights)' %in% names(V_setup$fr)) weights = V_setup$fr$`(weights)`
+  # construct V
+  V = as.matrix(crossprod(Lambdat %*% reTrms$Zt)) + (1-sum(h2s[reTrms$is_var])) * diag(weights)
+    
   # test if V is diagonal or sparse
   non_zero_upper_tri_V = abs(V[upper.tri(V,diag = FALSE)]) > 1e-10
   if(sum(non_zero_upper_tri_V) == 0) {  # V is diagonal
@@ -454,7 +380,17 @@ calculate_Grid = function(V_setup,h2s_matrix,verbose = TRUE){
   return(V_setup)
 }
 
-
+check_h2s_matrix = function(h2s_matrix,is_var = rep(T,ncol(h2s_matrix))) {
+  h2s_matrix = unique(h2s_matrix)
+  h2s_matrix = as.matrix(h2s_matrix[apply(h2s_matrix[,is_var,drop=FALSE],1,min) >= 0,,drop=FALSE])  # sum(variances) < 1
+  h2s_matrix = as.matrix(h2s_matrix[apply(h2s_matrix[,is_var,drop=FALSE],1,max) < 1,,drop=FALSE])  # sum(variances) < 1
+  h2s_matrix = as.matrix(h2s_matrix[rowSums(h2s_matrix[,is_var,drop=FALSE]) < 1-1e-10,,drop=FALSE])  # sum(variances) < 1
+  if(any(!is_var)) {
+    h2s_matrix = as.matrix(h2s_matrix[apply(abs(h2s_matrix[,!is_var,drop=FALSE]),1,min) < 1-1e-10,,drop=FALSE])  # |correlations| < 1
+  }
+  rownames(h2s_matrix) = NULL
+  return(h2s_matrix)
+}
 
 # makes a grid over a set of h2s
 # checks the grid for valid h2s_vectors (rows)
@@ -466,12 +402,13 @@ make_h2s_matrix = function(RE_names,steps) {
     names(steps) = RE_names
   }
   if(length(steps) != length(RE_names)) stop('wrong length of grid points. If a list, should have the length of RE_names')
+  # if(length(is_var) != length(RE_names)) stop('wrong length of is_var vector')
   if(is.null(names(steps))) names(steps) = RE_names
   
   h2s_matrix = expand.grid(steps[RE_names])
   colnames(h2s_matrix) = make.names(RE_names)
-  h2s_matrix = as.matrix(h2s_matrix[rowSums(h2s_matrix) < 1-1e-10,,drop=FALSE])
   rownames(h2s_matrix) = NULL
+  # h2s_matrix = check_h2s_matrix(h2s_matrix,is_var)
   h2s_matrix
 }
 
@@ -498,8 +435,9 @@ get_current_h2s = function(results,RE_names,ML,REML) {
 
 # makes balls around each row of a h2s_matrix
 # checks the balls for valid vectors
-get_h2s_ball = function(current_h2s,h2_step){
+get_h2s_ball = function(current_h2s,h2_step,is_var = rep(T,length(RE_names))){
   RE_names = colnames(current_h2s)
+  if(length(is_var) != length(RE_names)) stop('wrong length of is_var vector')
   h2s_ball = make_h2s_matrix(RE_names,c(-1,0,1)*h2_step)
   
   h2s_to_test = c()
@@ -508,19 +446,15 @@ get_h2s_ball = function(current_h2s,h2_step){
     new_h2s = sweep(h2s_ball,2,unlist(h2s),'+')
     h2s_to_test = rbind(h2s_to_test,new_h2s)
   }
-  h2s_to_test = unique(h2s_to_test)
-  h2s_to_test = h2s_to_test[apply(h2s_to_test,1,min) >= 0,,drop=FALSE]
-  h2s_to_test = h2s_to_test[apply(h2s_to_test,1,max) < 1,,drop=FALSE]
-  h2s_to_test = h2s_to_test[rowSums(h2s_to_test) < 1-1e-10,,drop=FALSE]
-  rownames(h2s_to_test) = NULL
+  h2s_to_test = check_h2s_matrix(h2s_to_test,is_var)
   return(h2s_to_test)
 }
 
 
 # finds current h2s, makes balls around them, compares them to tested_h2s, returns matrix
 # the challenge is that for some reason get_h2s_ball gets off by a very small amount, so h2s vectors aren't identical
-get_h2s_to_test = function(current_h2s,tested_h2s,h2_step,ML,REML){ 
-  all_h2s_to_test = get_h2s_ball(current_h2s,h2_step)
+get_h2s_to_test = function(current_h2s,tested_h2s,h2_step,ML,REML,is_var = rep(T,ncol(current_h2s))){ 
+  all_h2s_to_test = get_h2s_ball(current_h2s,h2_step,is_var)
   h2s_to_test = tested_h2s
   for(i in 1:nrow(all_h2s_to_test)){
     n = nrow(h2s_to_test)

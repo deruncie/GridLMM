@@ -4,6 +4,46 @@
 // [[Rcpp::depends(RcppEigen)]]
 using namespace Eigen;
 
+
+// [[Rcpp::export()]]
+List LDLt(SEXP A_) {
+  if(Rf_isMatrix(A_)){
+    Map<MatrixXd> A = as<Map<MatrixXd> >(A_);
+    Eigen::LDLT<MatrixXd> ldlt_A;
+    ldlt_A.compute(A);
+    MatrixXd I = MatrixXd::Identity(ldlt_A.rows(), ldlt_A.rows());
+    MatrixXd P = ldlt_A.transpositionsP() * I;
+    VectorXd d = ldlt_A.vectorD();
+    MatrixXd L = ldlt_A.matrixL();
+    SpMat Lsp = L.sparseView();
+    if(static_cast<double>(Lsp.nonZeros()) / I.size() > 0.25) {
+      return(List::create(
+          Named("P") = P.sparseView(),
+          Named("L") = L,
+          Named("d") = d
+      ));
+    } else{
+      return(List::create(
+          Named("P") = P.sparseView(),
+          Named("L") = Lsp,
+          Named("d") = d
+      ));
+    }
+  } else{
+    MSpMat A = as<MSpMat>(A_);
+    Eigen::SimplicialLDLT<SpMat> ldlt_A;
+    ldlt_A.compute(A);
+    MatrixXd I = MatrixXd::Identity(ldlt_A.rows(), ldlt_A.rows());
+    MatrixXd P = ldlt_A.permutationP() * I;
+    return(List::create(
+        Named("P") = P.sparseView(),
+        Named("L") = ldlt_A.matrixL(),
+        Named("d") = ldlt_A.vectorD()
+    ));
+  }
+}
+
+
 // [[Rcpp::export()]]
 Rcpp::List svd_c(Map<MatrixXd> X) {
   // Replacement of R's svd function with Eigen's version

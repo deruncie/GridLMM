@@ -5,6 +5,10 @@ GridLMM_SS_cisQTL <- function(Y, chol_Vi_R_, X_cov, X, X_indices, downdate_Xs, d
     .Call('_GridLMM_GridLMM_SS_cisQTL', PACKAGE = 'GridLMM', Y, chol_Vi_R_, X_cov, X, X_indices, downdate_Xs, downdate_weights, inv_prior_X)
 }
 
+LDLt <- function(A_) {
+    .Call('_GridLMM_LDLt', PACKAGE = 'GridLMM', A_)
+}
+
 svd_c <- function(X) {
     .Call('_GridLMM_svd_c', PACKAGE = 'GridLMM', X)
 }

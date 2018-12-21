@@ -234,32 +234,33 @@ GridLMM_ML = function(formula,data,weights = NULL,relmat = NULL,
                      V_setup = NULL, save_V_folder = NULL, # character vector giving folder name to save V_list
                      diagonalize=T,mc.cores = my_detectCores(),verbose=T) {
  
-  MM = prepMM(formula,data,weights,other_formulas = NULL,
+  V_setup = prepMM(formula,data,weights,other_formulas = NULL,
               relmat,X=NULL,X_ID=NULL,proximal_markers=NULL,V_setup,diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
-  lmod = MM$lmod
-  RE_setup = MM$RE_setup
-  V_setup = MM$V_setup
+  # lmod = MM$lmod
+  # RE_setup = MM$RE_setup
+  # V_setup = MM$V_setup
   
-  Y = matrix(lmod$fr[,1])
+  Y = matrix(V_setup$fr[,1])
   colnames(Y) = 'y'
-  X_cov = lmod$X
-  data = lmod$fr
+  X_cov = V_setup$X
+  data = V_setup$fr
   p = ncol(X_cov)
   
   # -------- rotate data ---------- #
   # speeds up everything if a single random effect
-  Qt = V_setup$Qt
+  Qt = V_setup$reTrms$Qt
   if(!is.null(Qt)){
     Y <- as.matrix(Qt %*% Y)
     X_cov <- as.matrix(Qt %*% X_cov)
   }
   
   # -------- prep_h2s ---------- #
-  RE_names = names(RE_setup)
+  RE_names = V_setup$reTrms$h2_names
   n_RE = length(RE_names)
   
   step_size = initial_step
-  h2s_to_test = make_h2s_matrix(RE_names,seq(0,1,by=step_size))
+  h2s_to_test = make_h2s_matrix(RE_names,seq(-1,1,by=step_size))
+  h2s_to_test = check_h2s_matrix(h2s_to_test,V_setup$reTrms$is_var)
   
   # while the number of grid points accounting for target_prob % of the posterior is less than thresh_nonzero, keep dividing the h2s_matrix intervals smaller and smaller around the top regions
   h2s_solutions = c()
@@ -271,6 +272,7 @@ GridLMM_ML = function(formula,data,weights = NULL,relmat = NULL,
     # -------- calculate likelihoods ----------- #
     registerDoParallel(mc.cores)
     results_list = foreach(h2s = iter(h2s_to_test,by = 'row')) %dopar% {
+      # print(h2s)
       chol_V_setup = make_chol_V_setup(V_setup,unlist(h2s))
       chol_Vi = chol_V_setup$chol_V
       inv_prior_X = rep(0,p)
@@ -289,11 +291,12 @@ GridLMM_ML = function(formula,data,weights = NULL,relmat = NULL,
     }
     
     current_h2s = get_current_h2s(results,RE_names,ML,REML)
-    h2s_to_test = get_h2s_to_test(current_h2s,tested_h2s,step_size,ML,REML)
+    h2s_to_test = get_h2s_to_test(current_h2s,tested_h2s,step_size,ML,REML,V_setup$reTrms$is_var)
     if(nrow(h2s_to_test) == 0 & step_size >= tolerance){
       step_size = step_size / 2
-      h2s_to_test = get_h2s_to_test(current_h2s,tested_h2s,step_size,ML,REML)
+      h2s_to_test = get_h2s_to_test(current_h2s,tested_h2s,step_size,ML,REML,V_setup$reTrms$is_var)
     }
+    # recover()
   }
   return(list(results = results, setup = V_setup))
 }

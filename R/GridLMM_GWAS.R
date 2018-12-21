@@ -112,16 +112,13 @@ GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,weights = NULL
   X = scale_SNPs(X,centerX,scaleX,fillNAX)
   
   # -------- prep Mixed Models ---------- #
-  MM = prepMM(formula,data,weights,other_formulas = list(test_formula,reduced_formula),
+  V_setup = prepMM(formula,data,weights,other_formulas = list(test_formula,reduced_formula),
               relmat,X,X_ID,proximal_markers,V_setup,diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
-  lmod = MM$lmod
-  RE_setup = MM$RE_setup
-  V_setup = MM$V_setup
   
-  Y = matrix(lmod$fr[,1])
+  Y = matrix(V_setup$fr[,1])
   colnames(Y) = 'y'
-  X_cov = lmod$X
-  data = lmod$fr
+  X_cov = V_setup$X
+  data = V_setup$fr
   
   # -------- Prepare tests ---------- #
   # -------- Test and reduced models ---------- #
@@ -210,13 +207,13 @@ GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,weights = NULL
     if(ncol(Y) > 1) stop('null model h2 only implemented for a single response')
     if(method == 'BF') {
       null_Bayes = GridLMM_posterior(formula,data,V_setup = V_setup,h2_divisions=3,mc.cores = mc.cores,verbose = verbose)
-      h2_start = matrix(colSums(null_Bayes$h2s_results$posterior*null_Bayes$h2s_results[,1:length(V_setup$ZKZts),drop=FALSE]),nr=1)
+      h2_start = matrix(colSums(null_Bayes$h2s_results$posterior*null_Bayes$h2s_results[,1:length(V_setup$reTrms$h2_names),drop=FALSE]),nr=1)
     } else{
       null_ML = GridLMM_ML(formula,data,V_setup = V_setup,tolerance = h2_start_tolerance,mc.cores = mc.cores,verbose=verbose)
       ML = REML = FALSE
       if(method == 'ML') ML = TRUE
       if(method == 'REML' || method == 'BF') REML = TRUE
-      h2_start = get_current_h2s(null_ML$results,names(V_setup$ZKZts),ML = ML,REML=REML)
+      h2_start = get_current_h2s(null_ML$results,V_setup$reTrms$h2_names,ML = ML,REML=REML)
     }
     if(verbose) {
       print('GridLMM_posterior h2s:')
@@ -225,7 +222,7 @@ GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,weights = NULL
   }
   
   if(algorithm == 'Full') {
-    h2_start = t(setup_Grid(names(RE_setup),h2_step,h2_start))
+    h2_start = t(setup_Grid(V_setup$reTrms$h2_names,h2_step,h2_start))
   }
   
   
@@ -280,7 +277,7 @@ run_GridLMM_GWAS = function(Y,X_cov,X_list_full, X_list_reduced = NULL,inv_prior
   # -------- rotate data ---------- #
   # speeds to everything if a single random effect
   
-  Qt = V_setup$Qt
+  Qt = V_setup$reTrms$Qt
   if(!is.null(Qt)){
     Y <- as.matrix(Qt %*% Y)
     X_cov <- as.matrix(Qt %*% X_cov)
@@ -298,7 +295,7 @@ run_GridLMM_GWAS = function(Y,X_cov,X_list_full, X_list_reduced = NULL,inv_prior
   }
   
   # -------- prep_h2s ---------- #
-  RE_names = names(V_setup$ZKZts)
+  RE_names = V_setup$reTrms$h2_names
   if(is.matrix(h2_start)){
     if(!ncol(h2_start) == length(RE_names)) stop('wrong length of h2_start provided')
     if(is.null(colnames(h2_start))) colnames(h2_start) = RE_names
@@ -385,6 +382,7 @@ fit_GridLMM_GWAS = function(Y,X_cov,X_list,h2_start,h2_step,V_setup,inv_prior_X 
   # starts at h2_start, and then moves out in equidistant circles. 
   # Only tests where the LL increases in one circle are re-tested in the next.
   # continues until the grid is fully covered, or no tests increase in LL
+  
   Y = as.matrix(Y)
   storage.mode(Y) = 'double'
   if(is.null(colnames(Y))) colnames(Y) = 1:ncol(Y)
@@ -462,7 +460,7 @@ fit_GridLMM_GWAS = function(Y,X_cov,X_list,h2_start,h2_step,V_setup,inv_prior_X 
       } else{
         current_h2s = tested_h2s
       }
-      h2s_to_test = get_h2s_to_test(current_h2s,tested_h2s,h2_step,ML,REML)
+      h2s_to_test = get_h2s_to_test(current_h2s,tested_h2s,h2_step,ML,REML,is_var = V_setup$reTrms$is_var)
       if(ncol(h2s_to_test) == 0) break
       n_steps = n_steps + 1   
     }
@@ -529,7 +527,7 @@ fit_GridLMM_GWAS = function(Y,X_cov,X_list,h2_start,h2_step,V_setup,inv_prior_X 
       } else{
         current_h2s = tested_h2s
       }
-      h2s_to_test = get_h2s_to_test(current_h2s,tested_h2s,h2_step,ML,REML)
+      h2s_to_test = get_h2s_to_test(current_h2s,tested_h2s,h2_step,ML,REML,is_var = V_setup$reTrms$is_var)
       if(nrow(h2s_to_test) == 0) break
       n_steps = n_steps + 1
       
