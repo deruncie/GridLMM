@@ -266,6 +266,7 @@ GridLMM_ML = function(formula,data,weights = NULL,relmat = NULL,
   h2s_solutions = c()
   tested_h2s = c()
   results = c()
+  
   while(step_size >= tolerance && nrow(h2s_to_test)>0) {
     if(verbose) print(sprintf('step_size: %s, num_to_test: %d', step_size, nrow(h2s_to_test)))
     
@@ -274,6 +275,7 @@ GridLMM_ML = function(formula,data,weights = NULL,relmat = NULL,
     results_list = foreach(h2s = iter(h2s_to_test,by = 'row')) %dopar% {
       # print(h2s)
       chol_V_setup = make_chol_V_setup(V_setup,unlist(h2s))
+      if(is.null(chol_V_setup)) return()
       chol_Vi = chol_V_setup$chol_V
       inv_prior_X = rep(0,p)
       calc_LL(Y,X_cov,X_list=NULL,t(h2s),chol_Vi,inv_prior_X,NULL,NULL,REML,BF=FALSE)
@@ -282,6 +284,7 @@ GridLMM_ML = function(formula,data,weights = NULL,relmat = NULL,
       # V_log_det <- chol_V_setup$V_log_det
       # calc_LL(Y,X_cov,list(matrix(0,n,0)),t(h2s),chol_V,V_log_det,inv_prior_X,NULL,NULL,REML,BF=FALSE)
     } 
+    results_list = results_list[lengths(results_list)>0]
     tested_h2s = rbind(tested_h2s,h2s_to_test)
     if(length(results) > 0) {
       results = compile_results(c(list(results),results_list))

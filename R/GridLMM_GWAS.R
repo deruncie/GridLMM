@@ -434,6 +434,7 @@ fit_GridLMM_GWAS = function(Y,X_cov,X_list,h2_start,h2_step,V_setup,inv_prior_X 
       results_list = foreach(h2s = iter(h2s_to_test,by='row')) %dopar% {
         h2s = h2s[1,]
         chol_V_setup = make_chol_V_setup(V_setup,h2s)
+        if(is.null(chol_V_setup)) return(NULL)
         chol_V = chol_V_setup$chol_V
         calc_LL_parallel(Y,X_cov,X_list,h2s,chol_V,inv_prior_X[1:ncol(X_cov)],
                           NULL,V_setup$n_SNPs_downdated_RRM,REML,BF,inner_cores,c())
@@ -500,6 +501,7 @@ fit_GridLMM_GWAS = function(Y,X_cov,X_list,h2_start,h2_step,V_setup,inv_prior_X 
       results_list = foreach(h2s = iter(h2s_to_test,by='row')) %dopar% {
         h2s = h2s[1,]
         chol_V_setup = make_chol_V_setup(V_setup,h2s)
+        if(is.null(chol_V_setup)) return(NULL)
         chol_V = chol_V_setup$chol_V
         calc_LL_parallel(Y,X_cov,X_list,h2s,chol_V,inv_prior_X,
                          downdate_Xs,V_setup$n_SNPs_downdated_RRM,REML,BF,inner_cores,active_X_list)

@@ -223,11 +223,11 @@ make_chol_V_setup = function(V_setup,h2s){
   }
   downdate_ratios = V_setup$downdate_ratios
   reTrms = V_setup$reTrms
-  RE_names = names(reTrms$cnms)
+  RE_groups = names(reTrms$cnms)
   
   theta = c()
-  for(i in 1:length(RE_names)) {
-    re = RE_names[i]
+  for(i in 1:length(RE_groups)) {
+    re = RE_groups[i]
     re_h2s = seq(reTrms$Tp[i]+1,reTrms$Tp[i+1])
     vcov = reTrms$Tlist[[re]]
     is_cov = !reTrms$is_var[re_h2s] # which are correlations
@@ -244,7 +244,8 @@ make_chol_V_setup = function(V_setup,h2s){
     vcov = diag(sqrt(vars),sum(!is_cov)) %*% vcov %*% diag(sqrt(vars),sum(!is_cov))
     
     # take cholesky LLt, and then save the lower triangle as part of theta
-    L_vcov = t(chol(vcov,pivot = FALSE))
+    L_vcov = try(t(chol(vcov,pivot = FALSE)),silent=T)
+    if(class(L_vcov) == 'try-error') return(NULL)
     theta = c(theta,L_vcov[lower.tri(L_vcov,diag = T)])
   }
   
@@ -621,6 +622,7 @@ calc_LL_parallel = function(Y,X_cov,X_list,h2s,chol_V,inv_prior_X,
 
 # takes a list of data.frames of results for the same tests and chooses the best value by ML (and REML), returning a single data.frame of results
 compile_results = function(results_list){
+  results_list = results_list[lengths(results_list) > 0] # exclude NULL results
   results = results_list[[1]]
   if(length(results_list) == 1) return(results_list[[1]])
   
