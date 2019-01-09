@@ -73,6 +73,15 @@ y = data$cov * beta_cov + sqrt(prop_X) * c(g) + sqrt(1-prop_X) * e
 y = y/sd(y)
 data$y = y
 
+null_model = GridLMM_ML(y~cov + (1|ID),data,relmat = list(ID = K))
+h2_start = null_model$results[,grepl('.ML',colnames(null_model$results),fixed=T),drop=FALSE]
+V_setup = null_model$setup
+
+Y = as.matrix(data$y)
+X_cov = null_model$setup$X
+X_list_full = list(X)
+X_list_null = NULL
+gwas = run_GridLMM_GWAS(Y,X_cov,X_list_full,X_list_null,V_setup = V_setup,h2_start = h2_start,method = 'ML',mc.cores=my_detectCores(),verbose = FALSE)
 
 
 g0 = GridLMM_ML(y~cov+(1+cov|Group),data,relmat = list(Group = tcrossprod(scale_SNPs(Xg,scaleX = F))/p))
