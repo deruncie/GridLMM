@@ -502,6 +502,12 @@ get_h2s_ball = function(current_h2s,h2_step){
   RE_names = colnames(current_h2s)
   h2s_ball = make_h2s_matrix(RE_names,c(-1,0,1)*h2_step)
   
+  if(nrow(h2s_ball) == 0) {
+    print(current_h2s)
+    print(h2_step)
+    print(h2s_ball)
+  }
+  
   h2s_to_test = c()
   for(i in 1:nrow(current_h2s)){
     h2s = current_h2s[i,]
