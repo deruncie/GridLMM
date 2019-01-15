@@ -169,24 +169,3 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// f
-double f(double x);
-RcppExport SEXP _GridLMM_f(SEXP xSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< double >::type x(xSEXP);
-    rcpp_result_gen = Rcpp::wrap(f(x));
-    return rcpp_result_gen;
-END_RCPP
-}
-// min_f
-List min_f();
-RcppExport SEXP _GridLMM_min_f() {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    rcpp_result_gen = Rcpp::wrap(min_f());
-    return rcpp_result_gen;
-END_RCPP
-}

@@ -49,11 +49,3 @@ GridLMM_SS_downdate_matrix <- function(Y, chol_Vi_R, X_cov, X_list_, X_indices, 
     .Call('_GridLMM_GridLMM_SS_downdate_matrix', PACKAGE = 'GridLMM', Y, chol_Vi_R, X_cov, X_list_, X_indices, downdate_Xs, downdate_weights, inv_prior_X)
 }
 
-f <- function(x) {
-    .Call('_GridLMM_f', PACKAGE = 'GridLMM', x)
-}
-
-min_f <- function() {
-    .Call('_GridLMM_min_f', PACKAGE = 'GridLMM')
-}
-
