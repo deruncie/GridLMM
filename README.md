@@ -1,8 +1,3 @@
----
-title: "GridLMM"
-output: html_notebook
----
-
 **GridLMM** is a package for fitting linear mixed models (LMMs) with multiple random effects.
 
 The fitting process is optimized for repeated evaluation of the random effect
