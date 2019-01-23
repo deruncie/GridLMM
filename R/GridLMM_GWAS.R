@@ -109,6 +109,7 @@ GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,weights = NULL
   algorithm = match.arg(algorithm)
   
   # -------- Re-scale SNPs ---------- #
+  X = as.matrix(X)  # ensure a matrix to avoid partial matching of rownames
   X = scale_SNPs(X,centerX,scaleX,fillNAX)
   
   # -------- prep Mixed Models ---------- #

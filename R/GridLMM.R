@@ -295,5 +295,5 @@ GridLMM_ML = function(formula,data,weights = NULL,relmat = NULL,
       h2s_to_test = get_h2s_to_test(current_h2s,tested_h2s,step_size,ML,REML)
     }
   }
-  return(list(results = results, setup = V_setup))
+  return(list(results = results, setup = V_setup,lmod = lmod))
 }
