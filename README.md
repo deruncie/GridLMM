@@ -26,7 +26,13 @@ Can run Wald tests (`method = 'REML'`), Likelihood ratio tests (`method = 'ML'`)
 
 ### Examples:
 
-There is a vignette walking through the data format necessary for GridLMM and a few analyses using `GridLMM_GWAS_fast`
+There is a vignette walking through the data format necessary for GridLMM and a few analyses using `GridLMM_GWAS_fast`.
+
+If you would like to build the vignette (see below), do:
+```{r}
+devtools::install_github('deruncie/GridLMM', build_vignettes = TRUE)
+```
+
 ```{r}
 vignette(topic = 'Running_GridLMM_GWAS',package='GridLMM')
 ```
