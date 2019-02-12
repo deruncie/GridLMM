@@ -166,12 +166,6 @@ The output is a list with two elements
 names(gwas)
 ```
 
-`setup` is parameters to re-run the model (say with a new X) like this:
-```{r}
-# gwas2 = run_GWAS_fast(X,gwas$setup,h2_step = 0.01,max_steps = 100,method = 'ML',verbose = FALSE)
-```
-
-
 `results` contains a table of the gwas results
 ```{r}
 head(gwas$results)
