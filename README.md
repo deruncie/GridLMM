@@ -26,7 +26,7 @@ Can run Wald tests (`method = 'REML'`), Likelihood ratio tests (`method = 'ML'`)
 
 ### Examples:
 
-There is a vignette walking through the data format necessary for GridLMM and a few analyses using `GridLMM_GWAS_fast`.
+There is a vignette walking through the data format necessary for GridLMM and a few analyses using `GridLMM_GWAS`.
 
 If you would like to build the vignette (see below), do:
 ```{r}
