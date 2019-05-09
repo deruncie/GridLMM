@@ -15,7 +15,6 @@
 #'     Otherwise, an object with S3 class "cv.glmnet". See \code{\link[glmnet]{cv.glmnet}}.
 #' @export
 #'
-#' @examples
 GridLMMnet = function(formula,data,X, X_ID = 'ID', weights = NULL, 
                       centerX = TRUE,scaleX = TRUE,relmat = NULL,
                       h2_step = 0.1, h2_start = NULL,

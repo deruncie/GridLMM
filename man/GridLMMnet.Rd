@@ -4,11 +4,12 @@
 \alias{GridLMMnet}
 \title{LASSO solutions in a linear mixed model using GridLMM}
 \usage{
-GridLMMnet(formula, data, X, X_ID = "ID", weights = NULL, centerX = TRUE,
-  scaleX = TRUE, relmat = NULL, h2_step = 0.1, h2_start = NULL,
-  alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs < nvars, 0.01,
-  1e-04), lambda = NULL, nfolds = NULL, foldid = NULL, RE_setup = NULL,
-  V_setup = NULL, save_V_folder = NULL, diagonalize = T,
+GridLMMnet(formula, data, X, X_ID = "ID", weights = NULL,
+  centerX = TRUE, scaleX = TRUE, relmat = NULL, h2_step = 0.1,
+  h2_start = NULL, alpha = 1, nlambda = 100,
+  lambda.min.ratio = ifelse(nobs < nvars, 0.01, 1e-04), lambda = NULL,
+  nfolds = NULL, foldid = NULL, RE_setup = NULL, V_setup = NULL,
+  save_V_folder = NULL, diagonalize = T,
   mc.cores = parallel::detectCores(), clusterType = "mclapply",
   verbose = T, ...)
 }

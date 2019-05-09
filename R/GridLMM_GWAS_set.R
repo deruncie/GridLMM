@@ -90,7 +90,6 @@
 #'   These can be re-passed to this function (or other GridLMM functions) to re-fit the model to the same data.}
 #' @export
 #'
-#' @examples
 GridLMM_GWAS_set = function(formula,data,weights = NULL,
                         X,X_ID = 'ID', set_matrix,
                         centerX = FALSE,scaleX = FALSE,fillNAX = FALSE,X_map = NULL, relmat = NULL,

@@ -60,7 +60,6 @@
 #' \item{V_setup}{The \code{V_setup} object for this model. Can be re-passed to this function (or other GridLMM functions) to re-fit the model to the same data.}
 #' @export
 #'
-#' @examples
 GridLMM_posterior = function(formula,data,weights = NULL,relmat = NULL,  
                   h2_divisions = 10,
                   h2_prior = function(h2s,n) 1/n, a = 0, b = 0, inv_prior_X = 0,
@@ -228,7 +227,6 @@ GridLMM_posterior = function(formula,data,weights = NULL,relmat = NULL,
 #' \item{V_setup}{The \code{V_setup} object for this model. Can be re-passed to this function (or other GridLMM functions) to re-fit the model to the same data.}
 #' @export
 #'
-#' @examples
 GridLMM_ML = function(formula,data,weights = NULL,relmat = NULL,  
                      initial_step = 0.5,tolerance = 0.01,ML = T,REML=T,
                      V_setup = NULL, save_V_folder = NULL, # character vector giving folder name to save V_list
