@@ -1,0 +1,112 @@
+---
+title: "GridLMMnet"
+output: html_notebook
+---
+
+```{r}
+library(GridLMM)
+library(glmnet)
+```
+
+This demonstrates the use of the `GridLMMnet` function.
+
+Create some simulated data:
+```{r}
+nG = 20
+nR = 30
+n = nG*nR
+data = data.frame(Group = factor(rep(1:nG,each = nR)),ID = 1:n)
+p = 1000
+X = matrix(sample(c(0,1),n*p,replace=T),n,p)
+rownames(X) = data$ID
+
+
+s2_g = 0.8
+s2_e = 0.2
+b1 = 10
+b2 = p-b1
+beta = c(rep(.5,b1),rep(0,b2))
+
+y = X %*% beta + sqrt(s2_g)*rnorm(nG)[data$Group] + sqrt(s2_e)*rnorm(n)
+
+library(lme4)
+m1 = lmer(y~X[,1:b1]+(1|Group),data)
+v1 = as.data.frame(VarCorr(m1))$vcov
+v1[1]/sum(v1)
+v1
+sum(v1)
+
+```
+
+Use glmnet to get the lasso solutions without random effects
+```{r}
+res0 = glmnet(X,y,alpha=1)
+```
+
+Standard coefficient-by-lambda plot. Red = true covariates, black= false covariates.
+```{r}
+plot(res0,'lambda',col = c(rep(2,b1),rep(1,b2)))
+```
+
+Run GridLMMnet
+
+```{r}
+res1 = GridLMMnet(y~1+(1|Group),data = data,X = X,h2_step = 0.025)
+```
+
+Standard coefficient-by-lambda plot. Red = true covariates, black= false covariates.
+```{r}
+plot(res1,'lambda',col = c(rep(2,b1),rep(1,b2)))
+```
+
+Plot the estimate variance component h^2
+```{r}
+plot(res1$h2s~ log(res1$lambda))
+abline(h=s2_g/(s2_g+s2_e))
+```
+
+Plot estimate of s2_g
+```{r}
+plot(res1$h2s*res1$s2s~ - log(res1$lambda),ylim = c(0,var(y)))
+abline(h=s2_g)
+abline(h=v1[1],col=2)
+```
+
+plot estiamte of s2_e
+```{r}
+plot((1-res1$h2s)*res1$s2s~ log(res1$lambda),ylim = c(0,var(y)))
+abline(h=s2_e)  # simulated data
+abline(h=v1[2],col=2) # true estimate
+```
+
+
+plot estimate of s2 = s2_g + s2_e
+```{r}
+plot(res1$s2s~ log(res1$lambda),ylim = c(0,var(y)))
+abline(h=s2_g+s2_e)  # simulated data
+abline(h=sum(v1),col=2) # true estimate
+```
+
+
+
+
+
+Compare to ggmix
+```{r}
+library(ggmix)
+K = tcrossprod(model.matrix(~0+factor(Group),data))
+sK = svd(K)
+res2 = ggmix(X,y,U = sK$u[,1:50],D = sK$d[1:50])
+```
+
+
+Standard coefficient-by-lambda plot. Red = true covariates, black= false covariates.
+```{r}
+plot(res2,col = c(rep(2,b1),rep(1,b2)))
+```
+
+
+```{r}
+plot(res2$eta[1,])
+```
+

@@ -1,6 +1,7 @@
 useDynLib(GridLMM)
 import(RcppEigen)
 importFrom(Rcpp, evalCpp)
+importFrom(methods,as)
 import(Matrix)
 importFrom(lme4,nobars)
 importFrom(lme4,findbars)

@@ -13,22 +13,71 @@ typedef Eigen::Map<SpMat> MSpMat;
 using namespace Eigen;
 
 // [[Rcpp::export()]]
-void sdi(Rcpp::List A, IntegerVector b){
-  IntegerVector a(0);
-  for(int i = 0; i < A.size(); i++) {
-    Rcout << Rf_isInteger(A[i]) << std::endl;
-    if(Rf_isInteger(A[i])) {
-      a = as<IntegerVector>(A[i]);
-    }
+MatrixXd my_cholUpdate(Map<MatrixXd> R, MatrixXd X) {
+  int n = X.rows();
+  LLT<MatrixXd,Lower> llt(n);
+  // llt.matrixL().nestedExpression().const_cast_derived() = VectorXd::Ones(n).asDiagonal();
+  llt.matrixL().nestedExpression().const_cast_derived() = R.transpose();
+  for(int i = 0; i < X.cols(); i++) {
+    llt.rankUpdate(X.col(i));
   }
-  Rcout << a << std::endl;
-  // Rcout << Rf_isInteger(a_) << std::endl;
-  // if(Rf_isInteger(a_)){
-  //   IntegerVector a = as<IntegerVector>(a_);
-  //   return(setdiff(a,b));
-  // }
-  // return(b);
+  MatrixXd L = llt.matrixL();
+  return(L);
 }
+
+// [[Rcpp::export()]]
+MatrixXd usemyChol1(Map<MatrixXd> R) {
+  int n = R.rows();
+  LLT<Ref<MatrixXd>,Lower> llt(n);
+  llt.matrixL().nestedExpression().const_cast_derived() = R.transpose();
+  MatrixXd L = llt.matrixL();
+  return(L);
+}
+// [[Rcpp::export()]]
+MatrixXd usemyChol2(Map<MatrixXd> R) {
+  // int n = R.rows();
+  LLT<MatrixXd,Lower> llt(R);
+  llt.matrixL().nestedExpression().const_cast_derived() = R.transpose();
+  MatrixXd L = llt.matrixL();
+  return(L);
+}
+// [[Rcpp::export()]]
+void usemyChol3(MatrixXd R) {
+  // int n = R.rows();
+  // LLT<MatrixXd,Lower> llt(n);
+  // llt.matrixL().nestedExpression().const_cast_derived() = R.transpose();
+  // MatrixXd L = llt.matrixL();
+  // MatrixXd L = R;
+  // return(L);
+}
+// [[Rcpp::export()]]
+void usemyChol4(Map<MatrixXd> R) {
+  // R.triangularView<Lower>().nestedExpression().
+  // int n = R.rows();
+  // LLT<MatrixXd,Lower> llt(n);
+  // llt.matrixL().nestedExpression().const_cast_derived() = R.transpose();
+  // MatrixXd L = llt.matrixL();
+  // Map<MatrixXd> L = R;
+  // return(R);
+}
+
+
+// void sdi(Rcpp::List A, IntegerVector b){
+//   IntegerVector a(0);
+//   for(int i = 0; i < A.size(); i++) {
+//     Rcout << Rf_isInteger(A[i]) << std::endl;
+//     if(Rf_isInteger(A[i])) {
+//       a = as<IntegerVector>(A[i]);
+//     }
+//   }
+//   Rcout << a << std::endl;
+//   // Rcout << Rf_isInteger(a_) << std::endl;
+//   // if(Rf_isInteger(a_)){
+//   //   IntegerVector a = as<IntegerVector>(a_);
+//   //   return(setdiff(a,b));
+//   // }
+//   // return(b);
+// }
 
 
 // void chol_update_R_inplace2(MatrixXd &R, MatrixXd X, VectorXd weights) {

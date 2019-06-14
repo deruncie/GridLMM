@@ -19,7 +19,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-`GridLMM_GWAS` and `GridLMM_GWAS_fast` implement an (approximate) linear mixed effect model GWAS that allows for multiple random effects.
+`GridLMM_GWAS` implement an (approximate) linear mixed effect model GWAS that allows for multiple random effects.
 
 A typical GWAS includes a single random effect for Kinship - accounting for non-uniform relatedness among the observations.
 
@@ -136,7 +136,7 @@ data$y = data$y + data$spatial_error #
 
 
 ## Run GWAS
-The main function for running a GWAS is `GridLMM_GWAS_fast`
+The main function for running a GWAS is `GridLMM_GWAS`
 
 ```{r}
 gwas = GridLMM_GWAS(
@@ -165,12 +165,6 @@ The output is a list with two elements
 ```{r}
 names(gwas)
 ```
-
-`setup` is parameters to re-run the model (say with a new X) like this:
-```{r}
-# gwas2 = run_GWAS_fast(X,gwas$setup,h2_step = 0.01,max_steps = 100,method = 'ML',verbose = FALSE)
-```
-
 
 `results` contains a table of the gwas results
 ```{r}
@@ -283,7 +277,7 @@ write.plink(file.base = 'test_data',snps = as(X,'SnpMatrix'),id = data$Geno,phen
 ```
 
 ### Estimate variance componenents using null model
-This serves as a starting value for GridLMM_GWAS_fast.
+This serves as a starting value for GridLMM_GWAS.
 We use `GridLMM_ML` here. Other programs like `GCTA` could be used and would be much faster for this step.
 If the marker-based kinship matrices are not prec-calculated, this needs to be done (ex. with `GCTA`). 
 We do it here in R. It is possible to do this calculation in chunks as well.

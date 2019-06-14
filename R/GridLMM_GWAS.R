@@ -90,7 +90,6 @@
 #'   These can be re-passed to this function (or other GridLMM functions) to re-fit the model to the same data.}
 #' @export
 #' 
-#' @examples
 GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,weights = NULL,
                          X,X_ID = 'ID',
                          centerX = FALSE,scaleX = FALSE,fillNAX = FALSE,X_map = NULL, relmat = NULL,
@@ -109,6 +108,7 @@ GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,weights = NULL
   algorithm = match.arg(algorithm)
   
   # -------- Re-scale SNPs ---------- #
+  X = as.matrix(X)  # ensure a matrix to avoid partial matching of rownames
   X = scale_SNPs(X,centerX,scaleX,fillNAX)
   
   # -------- prep Mixed Models ---------- #

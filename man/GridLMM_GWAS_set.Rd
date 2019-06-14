@@ -4,14 +4,14 @@
 \alias{GridLMM_GWAS_set}
 \title{GridLMM GWAS set}
 \usage{
-GridLMM_GWAS_set(formula, data, weights = NULL, X, X_ID = "ID", set_matrix,
-  centerX = FALSE, scaleX = FALSE, fillNAX = FALSE, X_map = NULL,
-  relmat = NULL, h2_step = 0.01, h2_start = NULL,
+GridLMM_GWAS_set(formula, data, weights = NULL, X, X_ID = "ID",
+  set_matrix, centerX = FALSE, scaleX = FALSE, fillNAX = FALSE,
+  X_map = NULL, relmat = NULL, h2_step = 0.01, h2_start = NULL,
   h2_start_tolerance = 0.001, max_steps = 100, method = c("REML"),
-  algorithm = c("Fast", "Full"), inv_prior_X = NULL, target_prob = 0.99,
-  proximal_markers = NULL, proximal_Xs = NULL, V_setup = NULL,
-  save_V_folder = NULL, diagonalize = T, mc.cores = my_detectCores(),
-  verbose = T)
+  algorithm = c("Fast", "Full"), inv_prior_X = NULL,
+  target_prob = 0.99, proximal_markers = NULL, proximal_Xs = NULL,
+  V_setup = NULL, save_V_folder = NULL, diagonalize = T,
+  mc.cores = my_detectCores(), verbose = T)
 }
 \arguments{
 \item{formula}{A two-sided linear formula as used in \code{\link[lme4]{lmer}} describing the fixed-effects

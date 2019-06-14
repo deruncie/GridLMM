@@ -15,7 +15,6 @@
 #'     Otherwise, an object with S3 class "cv.glmnet". See \code{\link[glmnet]{cv.glmnet}}.
 #' @export
 #'
-#' @examples
 GridLMMnet = function(formula,data,X, X_ID = 'ID', weights = NULL, 
                       centerX = TRUE,scaleX = TRUE,relmat = NULL,
                       h2_step = 0.1, h2_start = NULL,
@@ -170,12 +169,8 @@ run_glmnet_V = function(X_full,y, chol_V, alpha = alpha,
   
   chol_V_inv = as.matrix(solve(chol_V))
   
-  # calculate a normalization constant based on V_inv
-  ci = sum(chol_V_inv^2)/nobs # normalization constant based on trace of V_inv
-  
-  # normalize chol_V_inv
-  chol_V_inv = chol_V_inv/sqrt(ci)
-  V_log_det = -2*sum(log(diag(chol_V_inv)))
+  # penalty = tr_Vinv / nobs * lambda
+  tr_Vinv = sum(chol_V_inv^2)
   
   y_star = crossprod_cholR(chol_V_inv,y)
   X_star = crossprod_cholR(chol_V_inv,X_full)
@@ -201,7 +196,7 @@ run_glmnet_V = function(X_full,y, chol_V, alpha = alpha,
     #    I wonder if modifiying penalty.factor as above will make the deviance calculation consistent?
     resid_y_star = resid(lm(y_star~X_star[,penalty.factor == 0]))
     s2_hat = sum(resid_y_star^2)/nobs
-    max_lambda = max(penalty.factor*sum(penalty.factor)/(length(penalty.factor)-1)*abs(t(resid_y_star) %*% X_star ) / ( alpha * nobs))
+    max_lambda = nobs/tr_Vinv*max(penalty.factor*sum(penalty.factor)/(length(penalty.factor)-1)*abs(t(resid_y_star) %*% X_star ) / ( alpha * nobs))
     score = nobs*log(2*pi) + nobs*log(s2_hat) + V_log_det + nobs
     return(c(max_lambda=max_lambda,score=score))
   }
@@ -221,7 +216,7 @@ run_glmnet_V = function(X_full,y, chol_V, alpha = alpha,
     # run with standardized data, then adjust lambda for V_1.
     res = glmnet(X_star/sd_y_star,y_star/sd_y_star,family = 'gaussian',weights = rep(1,length(y_star)),penalty.factor = penalty.factor,
                  alpha = alpha, nlambda = nlambda, lambda.min.ratio = lambda.min.ratio,intercept = intercept,standardize = FALSE,...)
-    lambda = res$lambda * sd_y_star^2
+    lambda = nobs / tr_Vinv * res$lambda * sd_y_star^2 
     # alternatively, use family = 'mgaussian' and standarize.response = F
     # res = glmnet(X_star,y_star,family = 'mgaussian',weights = rep(1,length(y_star)),penalty.factor = penalty.factor,standardize.response = F,
     #              alpha = alpha, nlambda = nlambda, lambda.min.ratio = lambda.min.ratio,intercept = intercept,standardize = FALSE,...)
@@ -230,7 +225,7 @@ run_glmnet_V = function(X_full,y, chol_V, alpha = alpha,
   } else{
     # lambda = lambda * ci
     res = glmnet(X_star/sd_y_star,y_star/sd_y_star,family = 'gaussian',weights = rep(1,length(y_star)),penalty.factor = penalty.factor,
-                 alpha = alpha, lambda = lambda/sd_y_star^2 ,intercept = intercept,standardize = FALSE,...)
+                 alpha = alpha, lambda = tr_Vinv / nobs * lambda/sd_y_star^2 ,intercept = intercept,standardize = FALSE,...)
     # alternatively, use family = 'mgaussian' and standarize.response = F
     # res = glmnet(X_star,y_star,family = 'mgaussian',weights = rep(1,length(y_star)),penalty.factor = penalty.factor,standardize.response = F,
     #               alpha = alpha, lambda = lambda,intercept = intercept,standardize = FALSE,...)
@@ -243,7 +238,7 @@ run_glmnet_V = function(X_full,y, chol_V, alpha = alpha,
   errors = y_star[,1] - as.matrix(X_star %*% res$beta)
   RSSs = colSums(errors^2)
   penalty.factor = penalty.factor*(length(penalty.factor)-1)/sum(penalty.factor) # adjust penalty.factor to sum to p-1 (for intercept)
-  penalties = colSums(sweep(penalty.factor*((1-alpha)/2*res$beta^2 + alpha*abs(res$beta)),2,lambda,'*')) # from: https://web.stanford.edu/~hastie/glmnet/glmnet_alpha.html
+  penalties = colSums(sweep(penalty.factor*((1-alpha)/2*res$beta^2 + alpha*abs(res$beta)),2,tr_Vinv / nobs * lambda,'*')) # from: https://web.stanford.edu/~hastie/glmnet/glmnet_alpha.html
   
   s2_hats = (RSSs + 2*nobs*penalties)/nobs
   scores = (nobs*log(2*pi) + nobs*log(s2_hats) + V_log_det + nobs)

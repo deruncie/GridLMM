@@ -16,6 +16,7 @@ License: MIT + file LICENSE
 Imports:
     Rcpp (>= 0.12.16), 
     RcppEigen (>= 0.3.3.4.0),
+    methods,
     Matrix, 
     data.table, 
     lme4, 
@@ -27,7 +28,7 @@ Imports:
     itertools
 LinkingTo: Rcpp, RcppEigen
 ByteCompile: TRUE
-RoxygenNote: 6.0.1
+RoxygenNote: 6.1.1
 Suggests: knitr,
     rmarkdown,
     qqman,
