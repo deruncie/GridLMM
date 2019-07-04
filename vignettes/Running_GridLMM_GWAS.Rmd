@@ -215,8 +215,8 @@ points(sort(-log10(gwas1$results$p_value_REML))~u,pch=21,cex=.5,bg=2,col=NULL)
 ```
 
 ## Run GWAS for GxE using K_g and K_gxe
-This is following the idea from here:http://journals.plos.org/plosgenetics/article?id=10.1371/journal.pgen.1005849
-that suggested that just as you correct for genetic background with K = X %*% t(X) / ncol(X), you can also correct for GxE background
+This is following the idea from here: http://journals.plos.org/plosgenetics/article?id=10.1371/journal.pgen.1005849
+that suggested that just as you correct for genetic background with `K = X %*% t(X) / ncol(X)`, you can also correct for GxE background
 
 ```{r}
 # add a random environmental vector to data
@@ -287,7 +287,7 @@ K_G = tcrossprod(X)/ncol(X)
 ```
 
 
-The key here is to specify a folder with `save_V_folder`. This ay the pre-calculated matrices are saved and can be re-used.
+The key here is to specify a folder with `save_V_folder`. This way the pre-calculated matrices are saved and can be re-used.
 ```{r}
 null_model = GridLMM_ML(formula = y~1 + (1|Geno) + (1|Plot),data = data,relmat = list(Geno = K_G, Plot = K_plot),REML = T,save_V_folder = 'V_folder',tolerance = 1e-3)
 ```
