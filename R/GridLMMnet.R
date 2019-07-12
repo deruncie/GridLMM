@@ -250,7 +250,7 @@ run_glmnet_V = function(X_full,y, chol_V, alpha = alpha,
     # want X_1*beta_hat + V_12 * V_22^{-1}(y-X_2*b_hat)
     # note: chol_V_full %*% t(chol_V_full) * ci = V_22^{-1}
     
-    predicted = as.matrix(X_sub %*% res$beta) + as.matrix((t(chol_V_full[,holdOut]) %*% chol_V_full[,!holdOut]) %*% chol_V_inv %*% errors) * ci
+    predicted = as.matrix(X_sub %*% res$beta) + as.matrix((t(chol_V_full[,holdOut]) %*% chol_V_full[,!holdOut]) %*% chol_V_inv %*% errors)# * ci
     prediction_errors = y_sub - predicted
   }
   return(list(V_log_det = V_log_det,res.glmnet = res,scores = scores, lambda = lambda,
