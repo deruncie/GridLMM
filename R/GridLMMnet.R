@@ -19,16 +19,17 @@ GridLMMnet = function(formula,data,X, X_ID = 'ID', weights = NULL,
                       centerX = TRUE,scaleX = TRUE,relmat = NULL,
                       h2_step = 0.1, h2_start = NULL,
                       alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001), lambda=NULL,
+                      penalty.factor = NULL,
                       nfolds = NULL,foldid = NULL,
                       RE_setup = NULL, V_setup = NULL, save_V_folder = NULL,
                       diagonalize=T,mc.cores = parallel::detectCores(),clusterType = 'mclapply',verbose=T,...) 
 {
   
   # ----------- setup model ------------- #
-  
   setup = GridLMMnet_setup(formula,data,X,X_ID, weights,
                            centerX,scaleX,relmat,
                            alpha,nlambda,substitute(lambda.min.ratio),lambda,
+                           penalty.factor,
                            nfolds,foldid,
                            RE_setup,V_setup,save_V_folder,
                            diagonalize,mc.cores,clusterType,verbose,...)
@@ -68,6 +69,7 @@ GridLMMnet = function(formula,data,X, X_ID = 'ID', weights = NULL,
 GridLMMnet_setup = function(formula,data,X, X_ID = 'ID', weights = NULL, 
                             centerX = TRUE,scaleX = TRUE,relmat = NULL,
                             alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001), lambda=NULL,
+                            penalty.factor = NULL,
                             nfolds = NULL,foldid = NULL,
                             RE_setup = NULL, V_setup = NULL, save_V_folder = NULL,
                             diagonalize=T,mc.cores = parallel::detectCores(),clusterType = 'mclapply',verbose=T,...) {
@@ -114,7 +116,12 @@ GridLMMnet_setup = function(formula,data,X, X_ID = 'ID', weights = NULL,
   X = Z_X %*% X[colnames(Z_X),]
   
   nvars = ncol(X_cov) + ncol(X)
-  penalty.factor = c(rep(0,ncol(X_cov)),rep(1,ncol(X)))
+  if(!is.null(penalty.factor)) {
+    if(length(penalty.factor) != ncol(X)) stop("Wrong length of penalty.factor")
+    penalty.factor = c(rep(0,ncol(X_cov)),penalty.factor)
+  } else{
+    penalty.factor = c(rep(0,ncol(X_cov)),rep(1,ncol(X)))
+  }
   X_full = cbind(X_cov,X)
   
   # standardize y going in - makes glmnet more stable
