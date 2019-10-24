@@ -259,7 +259,9 @@ run_GridLMM_GWAS = function(Y,X_cov,X_list_full, X_list_reduced = NULL,inv_prior
   method = match.arg(method)
   
   # -------- check inputs ------ #
-  n = nrow(Y)
+  Y = as.matrix(Y)
+  X_cov = as.matrix(X_cov)
+  n = nrow(Y))
   if(nrow(X_cov) != n) stop("Wrong dimensions of X_cov")
   if(!is.list(X_list_full)) stop("X_list_full must be a list of matrices (min = 1)")
   if(any(sapply(X_list_full,function(x) nrow(x)) != n)) stop("Wrong dimensions of some matrices in X_list_full")
@@ -387,6 +389,8 @@ fit_GridLMM_GWAS = function(Y,X_cov,X_list,h2_start,h2_step,V_setup,inv_prior_X 
   # continues until the grid is fully covered, or no tests increase in LL
   Y = as.matrix(Y)
   storage.mode(Y) = 'double'
+  X_cov = as.matrix(X_cov)
+  storage.mode(X_cov) = 'double'
   if(is.null(colnames(Y))) colnames(Y) = 1:ncol(Y)
   
   if(method == 'ML'){
