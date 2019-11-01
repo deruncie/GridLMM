@@ -261,7 +261,7 @@ run_GridLMM_GWAS = function(Y,X_cov,X_list_full, X_list_reduced = NULL,inv_prior
   # -------- check inputs ------ #
   Y = as.matrix(Y)
   X_cov = as.matrix(X_cov)
-  n = nrow(Y))
+  n = nrow(Y)
   if(nrow(X_cov) != n) stop("Wrong dimensions of X_cov")
   if(!is.list(X_list_full)) stop("X_list_full must be a list of matrices (min = 1)")
   if(any(sapply(X_list_full,function(x) nrow(x)) != n)) stop("Wrong dimensions of some matrices in X_list_full")
