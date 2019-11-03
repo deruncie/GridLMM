@@ -30,7 +30,7 @@ There is a vignette walking through the data format necessary for GridLMM and a 
 
 If you would like to build the vignette (see below), do:
 ```{r}
-devtools::install_github('deruncie/GridLMM', build_opts = c("--no-resave-data", "--no-manual"),force = TRUE)
+devtools::install_github('deruncie/GridLMM', build_opts = c("--no-resave-data", "--no-manual"),force = TRUE,build_vignettes = TRUE)
 ```
 
 ```{r}

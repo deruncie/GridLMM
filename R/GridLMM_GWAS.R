@@ -243,6 +243,10 @@ GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,weights = NULL
   
   results = run_GridLMM_GWAS(Y,X_cov,X_list_full, X_list_reduced,inv_prior_X,X_map,V_setup,h2_start,h2_step,target_prob,proximal_markers, proximal_Xs, method,mc.cores,verbose)
   
+  # fix beta column names
+  beta_cols = grepl('beta.',colnames(results))
+  colnames(results)[beta_cols] = c(colnames(X_cov),paste('X',colnames(mm_test),sep=':'))
+  
   return(list(
     results = results,
     setup = setup
