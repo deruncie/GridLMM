@@ -344,3 +344,20 @@ Compare results - should be the same as if we had run all at once.
 plot(-log10(full_results$p_value_REML),-log10(gwas$results$p_value_REML));abline(0,1)
 ```
 
+
+## Run GridLMM_posterior
+```{r}
+# build genetic kinship matrix
+K = tcrossprod(sweep(X,2,colMeans(X),'-'))
+K = K/mean(diag(K))
+posterior = GridLMM_posterior(formula = y~1 + (1|Geno) + (1|Plot),
+                              data = data,
+                              relmat = list(Plot = K_plot,Geno = K),
+                              h2_divisions = 20)
+```
+
+```{r}
+library(ggplot2)
+ggplot(posterior$h2s_results,aes(x=Geno,y=Plot)) + geom_point(aes(size = posterior)) + xlim(c(0,1)) + ylim(c(0,1))
+```
+

@@ -78,6 +78,7 @@ GridLMM_posterior = function(formula,data,weights = NULL,relmat = NULL,
   colnames(Y) = 'y'
   X_cov = lmod$X
   data = lmod$fr
+  n = nrow(data)
   
   p = ncol(X_cov)
   if(is.null(inv_prior_X)) {
