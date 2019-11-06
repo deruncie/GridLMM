@@ -170,7 +170,8 @@ GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,weights = NULL
   if(is.null(rownames(X))) stop(sprintf('X must have rownames that correspond with column %s in data',X_ID))
   stopifnot(all(colnames(Z_X) %in% rownames(X)))
   
-  X = Z_X %*% X[colnames(Z_X),]
+  # X = Z_X %*% X[colnames(Z_X),]
+  X = premultiply_list_of_matrices(Z_X,list(X[colnames(Z_X),]))[[1]]
   if(is.list(proximal_Xs)) {
     for(i in 1:length(proximal_Xs)) {
       if(is.null(rownames(proximal_Xs[[i]]))) stop(sprintf('proximal_Xs must have rownames that correspond with column %s in data',X_ID))
