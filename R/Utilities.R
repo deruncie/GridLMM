@@ -359,6 +359,10 @@ make_chol_V_setup = function(V_setup,h2s){
 
 
 scale_SNPs = function(X,centerX=TRUE,scaleX=TRUE,fillNAX = FALSE){
+  if(!centerX & !scaleX & !fillNAX) {
+    if(any(is.na(X))) stop('NAs in X. Set fillNAX = TRUE')
+    return(X)
+  }
   if(all(range(X) == c(-1,1))){
     pi = colMeans((X+1)/2)
     # if(centerX){
