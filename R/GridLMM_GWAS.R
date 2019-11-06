@@ -165,14 +165,19 @@ GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,weights = NULL
   }
   
   # model.matrix used to expand X to size of data based on X_ID
-  Z_X = model.matrix(formula(sprintf("~0+%s",X_ID)),droplevels(data))
-  colnames(Z_X) = sub(X_ID,'',colnames(Z_X),fixed = T)
+  # Z_X = model.matrix(formula(sprintf("~0+%s",X_ID)),droplevels(data))
+  # colnames(Z_X) = sub(X_ID,'',colnames(Z_X),fixed = T)
+  # if(is.null(rownames(X))) stop(sprintf('X must have rownames that correspond with column %s in data',X_ID))
+  # stopifnot(all(colnames(Z_X) %in% rownames(X)))
+  # X = premultiply_list_of_matrices(Z_X,list(X[colnames(Z_X),]))[[1]]
   if(is.null(rownames(X))) stop(sprintf('X must have rownames that correspond with column %s in data',X_ID))
-  stopifnot(all(colnames(Z_X) %in% rownames(X)))
+  stopifnot(all(data[[X_ID]] %in% rownames(X)))
+  X = X[match(data[[X_ID]],rownames(X)),]
   
-  # X = Z_X %*% X[colnames(Z_X),]
-  X = premultiply_list_of_matrices(Z_X,list(X[colnames(Z_X),]))[[1]]
+  
   if(is.list(proximal_Xs)) {
+    Z_X = model.matrix(formula(sprintf("~0+%s",X_ID)),droplevels(data))
+    colnames(Z_X) = sub(X_ID,'',colnames(Z_X),fixed = T)
     for(i in 1:length(proximal_Xs)) {
       if(is.null(rownames(proximal_Xs[[i]]))) stop(sprintf('proximal_Xs must have rownames that correspond with column %s in data',X_ID))
       proximal_Xs[[i]] = Z_X %*% proximal_Xs[[i]][colnames(Z_X),]

@@ -727,6 +727,7 @@ compile_results = function(results_list){
   if(ML) {
     MLs <- foreach(results_i = results_list,index = results_list_ID,.combine = 'cbind') %do% results_i$ML_logLik[index] 
     # max_ML_index = apply(MLs,1,function(x) which.max(x)[1])
+    MLs[is.na(MLs)] = -Inf
     max_ML_index = max.col(MLs,'first')
     results$ML_index = max_ML_index
     
@@ -747,6 +748,7 @@ compile_results = function(results_list){
   } else{
     REMLs <- foreach(results_i = results_list,index = results_list_ID,.combine = 'cbind') %do% results_i$REML_logLik[index] 
     # max_REML_index = apply(REMLs,1,function(x) which.max(x)[1])
+    REMLs[is.na(REMLs)] = -Inf
     max_REML_index = max.col(REMLs,'first')
     results$REML_index = max_REML_index
     
