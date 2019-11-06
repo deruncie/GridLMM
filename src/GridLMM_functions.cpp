@@ -249,10 +249,10 @@ VectorXd log_det_of_XtX(
   Eigen::LLT<MatrixXd> llt_of_A(A);
   MatrixXd L_A = llt_of_A.matrixL();
   
-  std::vector<MatrixXd> Xs;
+  std::vector<Map<MatrixXd> > Xs;
   for(int i = 0; i < b_x; i++){
-    MatrixXd Xi = Rcpp::as<Map<MatrixXd> >(X_tests[i]);
-    Xs.push_back(Xi);
+    Xs.push_back(as<Map<MatrixXd> >(X_tests[i]));
+    if(Xs[i].cols() != Xs[0].cols()) stop("Different numbers of columns in X_list matrices");
   }
   int p = X_indices.size();
   
@@ -428,6 +428,7 @@ Rcpp::List GridLMM_SS_matrix(
     
     // run tests
     for(int i = 0; i < p; i++) {
+      Rcpp::checkUserInterrupt();
       MatrixXd Xi_std = X_std.block(0,i*b_x,n,b_x);
       
       MatrixXd Xf_std(n,b);

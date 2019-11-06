@@ -553,6 +553,7 @@ calc_REML = function(SSs,n,b,m){
 
 get_LL = function(SSs,X_cov,X_list,active_X_list,n,m,ML,REML,BF){
   SSs$ML = calc_ML(SSs,n)
+  SSs$s2 = SSs$RSSs / n
   if(REML) {
     if(is.null(SSs$log_det_X)) SSs$log_det_X = log_det_of_XtX(X_cov,X_list,active_X_list)
     b = ncol(X_cov) + length(X_list)
@@ -561,6 +562,7 @@ get_LL = function(SSs,X_cov,X_list,active_X_list,n,m,ML,REML,BF){
     # somehow need to figure out how to specify M
     SSs$F_hats = F_hats(SSs$beta_hats,SSs$RSSs,SSs$V_star_L,n,b,m)  
     SSs$REML = calc_REML(SSs,n,b,m)
+    SSs$s2 = SSs$RSSs / (n-b)
   }
   if(BF){
     a_star = n/2
@@ -612,6 +614,7 @@ calc_LL = function(Y,X_cov,X_list,h2s,chol_Vi,inv_prior_X,
   
   results_i = data.frame(Trait = rep(colnames(Y),each = n_tests),
                          X_ID = NA,
+                         s2 = c(t(log_LL$s2)),
                          ML_logLik = c(log_LL$ML),
                          ML_h2,
                          stringsAsFactors = F)
@@ -708,6 +711,7 @@ compile_results = function(results_list){
   F_columns = colnames(results)[grep("F.",colnames(results),fixed=T)]
   posterior_column = colnames(results)[grep("log_posterior_factor",colnames(results),fixed=T)]
   tau_column = colnames(results)[grep("Tau",colnames(results),fixed=T)]
+  s2_column = colnames(results)[grep("s2",colnames(results),fixed=T)]
   
   ML = FALSE
   if(length(ML_h2_columns) > 0) ML = TRUE
@@ -761,6 +765,11 @@ compile_results = function(results_list){
     if(length(tau_column)>0) {
       taus = foreach(results_i = results_list,index = results_list_ID,.combine = 'cbind') %do% results_i[index,tau_column]
       results[[tau_column]] = taus[REML_index]
+    }
+    
+    if(length(s2_column)>0) {
+      s2s = foreach(results_i = results_list,index = results_list_ID,.combine = 'cbind') %do% results_i[index,s2_column]
+      results[[s2_column]] = s2s[REML_index]
     }
     
   }

@@ -19,22 +19,22 @@ GridLMMnet = function(formula,data,X, X_ID = 'ID', weights = NULL,
                       centerX = TRUE,scaleX = TRUE,relmat = NULL,
                       h2_step = 0.1, h2_start = NULL,
                       alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001), lambda=NULL,
+                      penalty.factor = NULL,
                       nfolds = NULL,foldid = NULL,
                       RE_setup = NULL, V_setup = NULL, save_V_folder = NULL,
                       diagonalize=T,mc.cores = parallel::detectCores(),clusterType = 'mclapply',verbose=T,...) 
 {
   
   # ----------- setup model ------------- #
-  
   setup = GridLMMnet_setup(formula,data,X,X_ID, weights,
                            centerX,scaleX,relmat,
                            alpha,nlambda,substitute(lambda.min.ratio),lambda,
+                           penalty.factor,
                            nfolds,foldid,
                            RE_setup,V_setup,save_V_folder,
                            diagonalize,mc.cores,clusterType,verbose,...)
   nobs = length(setup$y)
   nvars = ncol(setup$X_full)
-  
   
   # ----------- setup Grid ------------- #
   setup$h2s_matrix = setup_Grid(names(setup$V_setup$RE_setup),h2_step,h2_start)
@@ -68,12 +68,14 @@ GridLMMnet = function(formula,data,X, X_ID = 'ID', weights = NULL,
 GridLMMnet_setup = function(formula,data,X, X_ID = 'ID', weights = NULL, 
                             centerX = TRUE,scaleX = TRUE,relmat = NULL,
                             alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001), lambda=NULL,
+                            penalty.factor = NULL,
                             nfolds = NULL,foldid = NULL,
                             RE_setup = NULL, V_setup = NULL, save_V_folder = NULL,
                             diagonalize=T,mc.cores = parallel::detectCores(),clusterType = 'mclapply',verbose=T,...) {
  
   
   # -------- sort by foldid ---------- #
+  original_order = NULL
   if(!is.null(nfolds)) {
     if(!is.null(foldid)) {
       warning('using provided foldid, NOT nfolds')
@@ -83,15 +85,22 @@ GridLMMnet_setup = function(formula,data,X, X_ID = 'ID', weights = NULL,
   }
   if(!is.null(foldid)){
     if(length(foldid) != nrow(data)) stop('wrong length of foldid')
-    data$original_order = 1:nrow(data)
+    original_order = 1:nrow(data)  # NOT SAFE!!!
     new_order = order(foldid)
+    
+    # check that all variables are in data. If not, add
+    for(term in all.vars(formula)) {
+      if(!term %in% colnames(data)) {
+        data[[term]] = eval(parse(text=term))
+      }
+    }
     data = data[new_order,,drop=FALSE]
     X = X[new_order,,drop=FALSE]
     if(!is.null(weights)) weights = weights[new_order]
     foldid = foldid[new_order]
+    original_order = original_order[new_order]
     diagonalize = F # can't diagonalize with cross-validation
   }
-  
   # -------- prep Mixed Models ---------- #
   MM = prepMM(formula,data,weights,other_formulas = NULL,
               relmat,X,X_ID,proximal_markers=NULL,V_setup,diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
@@ -99,12 +108,15 @@ GridLMMnet_setup = function(formula,data,X, X_ID = 'ID', weights = NULL,
   RE_setup = MM$RE_setup
   V_setup = MM$V_setup
   
-  
   y = matrix(lmod$fr[,1])
   n = nobs = nrow(y)
   X_cov = lmod$X
   intercept = 0
-  if(ncol(X_cov)>0 && all(X_cov[,1]==1)) intercept = 1
+  if(ncol(X_cov)>0 && all(X_cov[,1]==1)) {
+    intercept = 1
+  } else if(ncol(X_cov) == 0 && all(X[,1] == 1)) {
+    intercept = 1
+  }
   data = lmod$fr
   
   Z_X = model.matrix(formula(sprintf("~0+%s",X_ID)),droplevels(data))
@@ -114,7 +126,12 @@ GridLMMnet_setup = function(formula,data,X, X_ID = 'ID', weights = NULL,
   X = Z_X %*% X[colnames(Z_X),]
   
   nvars = ncol(X_cov) + ncol(X)
-  penalty.factor = c(rep(0,ncol(X_cov)),rep(1,ncol(X)))
+  if(!is.null(penalty.factor)) {
+    if(length(penalty.factor) != ncol(X)) stop("Wrong length of penalty.factor")
+    penalty.factor = c(rep(0,ncol(X_cov)),penalty.factor)
+  } else{
+    penalty.factor = c(rep(0,ncol(X_cov)),rep(1,ncol(X)))
+  }
   X_full = cbind(X_cov,X)
   
   # standardize y going in - makes glmnet more stable
@@ -139,7 +156,8 @@ GridLMMnet_setup = function(formula,data,X, X_ID = 'ID', weights = NULL,
     sd_y = sd_y,
     weights = weights,
     lambda.min.ratio = eval(lambda.min.ratio),
-    V_setup = V_setup
+    V_setup = V_setup,
+    original_order = original_order
   )
   
   return(setup)  
@@ -250,7 +268,7 @@ run_glmnet_V = function(X_full,y, chol_V, alpha = alpha,
     # want X_1*beta_hat + V_12 * V_22^{-1}(y-X_2*b_hat)
     # note: chol_V_full %*% t(chol_V_full) * ci = V_22^{-1}
     
-    predicted = as.matrix(X_sub %*% res$beta) + as.matrix((t(chol_V_full[,holdOut]) %*% chol_V_full[,!holdOut]) %*% chol_V_inv %*% errors) * ci
+    predicted = as.matrix(X_sub %*% res$beta) + as.matrix((t(chol_V_full[,holdOut]) %*% chol_V_full[,!holdOut]) %*% chol_V_inv %*% errors)# * ci
     prediction_errors = y_sub - predicted
   }
   return(list(V_log_det = V_log_det,res.glmnet = res,scores = scores, lambda = lambda,
@@ -361,7 +379,6 @@ collect_results_GridLMMnet = function(setup,results,lambda) {
   
   # clean up object. Temporary until I understand how to process these correctly
   res$npasses = NA
-  
   
   if(!is.null(foldid)){
     # this is duplicating cv.glmnet, so returns a differently structured object

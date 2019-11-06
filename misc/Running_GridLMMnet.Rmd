@@ -12,8 +12,8 @@ This demonstrates the use of the `GridLMMnet` function.
 
 Create some simulated data:
 ```{r}
-nG = 20
-nR = 30
+nG = 300
+nR = 3
 n = nG*nR
 data = data.frame(Group = factor(rep(1:nG,each = nR)),ID = 1:n)
 p = 1000
@@ -25,7 +25,7 @@ s2_g = 0.8
 s2_e = 0.2
 b1 = 10
 b2 = p-b1
-beta = c(rep(.5,b1),rep(0,b2))
+beta = c(rep(.3,b1),rep(0,b2))
 
 y = X %*% beta + sqrt(s2_g)*rnorm(nG)[data$Group] + sqrt(s2_e)*rnorm(n)
 
@@ -96,7 +96,8 @@ Compare to ggmix
 library(ggmix)
 K = tcrossprod(model.matrix(~0+factor(Group),data))
 sK = svd(K)
-res2 = ggmix(X,y,U = sK$u[,1:50],D = sK$d[1:50])
+res2 = ggmix(X,y,U = sK$u[,1:nG],D = sK$d[1:nG])
+# res2 = ggmix(X,y,kinship = K,n_nonzero_eigenvalues = nG)
 ```
 
 
@@ -107,6 +108,6 @@ plot(res2,col = c(rep(2,b1),rep(1,b2)))
 
 
 ```{r}
-plot(res2$eta[1,])
+plot(res2$eta[1,]~ log(res2$lambda))
 ```
 

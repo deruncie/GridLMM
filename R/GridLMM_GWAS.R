@@ -243,6 +243,10 @@ GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,weights = NULL
   
   results = run_GridLMM_GWAS(Y,X_cov,X_list_full, X_list_reduced,inv_prior_X,X_map,V_setup,h2_start,h2_step,target_prob,proximal_markers, proximal_Xs, method,mc.cores,verbose)
   
+  # # fix beta column names
+  # beta_cols = grepl('beta.',colnames(results))
+  # colnames(results)[beta_cols] = c(colnames(X_cov),paste('X',colnames(mm_test),sep=':'))
+  
   return(list(
     results = results,
     setup = setup
@@ -259,6 +263,8 @@ run_GridLMM_GWAS = function(Y,X_cov,X_list_full, X_list_reduced = NULL,inv_prior
   method = match.arg(method)
   
   # -------- check inputs ------ #
+  Y = as.matrix(Y)
+  X_cov = as.matrix(X_cov)
   n = nrow(Y)
   if(nrow(X_cov) != n) stop("Wrong dimensions of X_cov")
   if(!is.list(X_list_full)) stop("X_list_full must be a list of matrices (min = 1)")
@@ -387,6 +393,8 @@ fit_GridLMM_GWAS = function(Y,X_cov,X_list,h2_start,h2_step,V_setup,inv_prior_X 
   # continues until the grid is fully covered, or no tests increase in LL
   Y = as.matrix(Y)
   storage.mode(Y) = 'double'
+  X_cov = as.matrix(X_cov)
+  storage.mode(X_cov) = 'double'
   if(is.null(colnames(Y))) colnames(Y) = 1:ncol(Y)
   
   if(method == 'ML'){
