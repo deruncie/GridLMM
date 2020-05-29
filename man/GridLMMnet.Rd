@@ -4,14 +4,35 @@
 \alias{GridLMMnet}
 \title{LASSO solutions in a linear mixed model using GridLMM}
 \usage{
-GridLMMnet(formula, data, X, X_ID = "ID", weights = NULL,
-  centerX = TRUE, scaleX = TRUE, relmat = NULL, h2_step = 0.1,
-  h2_start = NULL, alpha = 1, nlambda = 100,
-  lambda.min.ratio = ifelse(nobs < nvars, 0.01, 1e-04), lambda = NULL,
-  nfolds = NULL, foldid = NULL, RE_setup = NULL, V_setup = NULL,
-  save_V_folder = NULL, diagonalize = T,
-  mc.cores = parallel::detectCores(), clusterType = "mclapply",
-  verbose = T, ...)
+GridLMMnet(
+  formula,
+  data,
+  X,
+  X_ID = "ID",
+  weights = NULL,
+  centerX = TRUE,
+  scaleX = TRUE,
+  relmat = NULL,
+  h2_step = 0.1,
+  h2_start = NULL,
+  alpha = 1,
+  lambdaType = "s2e",
+  scoreType = "LL",
+  nlambda = 100,
+  lambda.min.ratio = ifelse(nobs < nvars, 0.01, 1e-04),
+  lambda = NULL,
+  penalty.factor = NULL,
+  nfolds = NULL,
+  foldid = NULL,
+  RE_setup = NULL,
+  V_setup = NULL,
+  save_V_folder = NULL,
+  diagonalize = T,
+  mc.cores = parallel::detectCores(),
+  clusterType = "mclapply",
+  verbose = T,
+  ...
+)
 }
 \arguments{
 \item{formula}{A two-sided linear formula as used in \code{\link[lme4]{lmer}} describing the fixed-effects
@@ -75,6 +96,15 @@ If null, will be calculated using \link{GridLMM_ML}.}
     a decreasing sequence of \code{lambda} values. \code{glmnet} relies
   on its warms starts for speed, and its often faster to fit a whole
   path than compute a single fit.}
+
+\item{penalty.factor}{Separate penalty factors can be applied to each
+    coefficient. This is a number that multiplies \code{lambda} to allow
+    differential shrinkage. Can be 0 for some variables, which implies
+    no shrinkage, and that variable is always included in the
+    model. Default is 1 for all variables (and implicitly infinity for
+    variables listed in \code{exclude}). Note: the penalty factors are
+  internally rescaled to sum to nvars, and the lambda sequence will
+  reflect this change.}
 
 \item{foldid}{vector of integers that divide the data into a set of non-overlapping folds for cross-validation.}
 

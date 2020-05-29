@@ -49,3 +49,15 @@ GridLMM_SS_downdate_matrix <- function(Y, chol_Vi_R, X_cov, X_list_, X_indices, 
     .Call('_GridLMM_GridLMM_SS_downdate_matrix', PACKAGE = 'GridLMM', Y, chol_Vi_R, X_cov, X_list_, X_indices, downdate_Xs, downdate_weights, inv_prior_X)
 }
 
+Calculate_qt_LASSO <- function(X, beta, lambdas) {
+    .Call('_GridLMM_Calculate_qt_LASSO', PACKAGE = 'GridLMM', X, beta, lambdas)
+}
+
+chol_update2 <- function(L, X, sign) {
+    .Call('_GridLMM_chol_update2', PACKAGE = 'GridLMM', L, X, sign)
+}
+
+chol_update2s <- function(L, X, sign) {
+    .Call('_GridLMM_chol_update2s', PACKAGE = 'GridLMM', L, X, sign)
+}
+

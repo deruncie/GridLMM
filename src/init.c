@@ -9,6 +9,7 @@
 
 /* .Call calls */
 extern SEXP _GridLMM_build_downdate_Xs(SEXP, SEXP, SEXP, SEXP);
+extern SEXP _GridLMM_Calculate_qt_LASSO(SEXP, SEXP, SEXP);
 extern SEXP _GridLMM_chol_c(SEXP);
 extern SEXP _GridLMM_chol_dropRows(SEXP, SEXP, SEXP);
 extern SEXP _GridLMM_chol_update(SEXP, SEXP, SEXP);
@@ -23,6 +24,7 @@ extern SEXP _GridLMM_svd_c(SEXP);
 
 static const R_CallMethodDef CallEntries[] = {
     {"_GridLMM_build_downdate_Xs",            (DL_FUNC) &_GridLMM_build_downdate_Xs,            4},
+    {"_GridLMM_Calculate_qt_LASSO",           (DL_FUNC) &_GridLMM_Calculate_qt_LASSO,           3},
     {"_GridLMM_chol_c",                       (DL_FUNC) &_GridLMM_chol_c,                       1},
     {"_GridLMM_chol_dropRows",                (DL_FUNC) &_GridLMM_chol_dropRows,                3},
     {"_GridLMM_chol_update",                  (DL_FUNC) &_GridLMM_chol_update,                  3},

@@ -169,3 +169,42 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// Calculate_qt_LASSO
+VectorXd Calculate_qt_LASSO(Map<MatrixXd> X, Map<MatrixXd> beta, Map<VectorXd> lambdas);
+RcppExport SEXP _GridLMM_Calculate_qt_LASSO(SEXP XSEXP, SEXP betaSEXP, SEXP lambdasSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Map<MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< Map<MatrixXd> >::type beta(betaSEXP);
+    Rcpp::traits::input_parameter< Map<VectorXd> >::type lambdas(lambdasSEXP);
+    rcpp_result_gen = Rcpp::wrap(Calculate_qt_LASSO(X, beta, lambdas));
+    return rcpp_result_gen;
+END_RCPP
+}
+// chol_update2
+MatrixXd chol_update2(MatrixXd L, MatrixXd X, int sign);
+RcppExport SEXP _GridLMM_chol_update2(SEXP LSEXP, SEXP XSEXP, SEXP signSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< MatrixXd >::type L(LSEXP);
+    Rcpp::traits::input_parameter< MatrixXd >::type X(XSEXP);
+    Rcpp::traits::input_parameter< int >::type sign(signSEXP);
+    rcpp_result_gen = Rcpp::wrap(chol_update2(L, X, sign));
+    return rcpp_result_gen;
+END_RCPP
+}
+// chol_update2s
+MatrixXd chol_update2s(MatrixXd L, MatrixXd X, int sign);
+RcppExport SEXP _GridLMM_chol_update2s(SEXP LSEXP, SEXP XSEXP, SEXP signSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< MatrixXd >::type L(LSEXP);
+    Rcpp::traits::input_parameter< MatrixXd >::type X(XSEXP);
+    Rcpp::traits::input_parameter< int >::type sign(signSEXP);
+    rcpp_result_gen = Rcpp::wrap(chol_update2s(L, X, sign));
+    return rcpp_result_gen;
+END_RCPP
+}

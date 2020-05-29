@@ -18,8 +18,7 @@
 GridLMMnet = function(formula,data,X, X_ID = 'ID', weights = NULL, 
                       centerX = TRUE,scaleX = TRUE,relmat = NULL,
                       h2_step = 0.1, h2_start = NULL,
-                      alpha = 1, lambdaType = 's2e', scoreType = 'LL',
-                      nlambda = 100, lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001), lambda=NULL,
+                      alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001), lambda=NULL,
                       penalty.factor = NULL,
                       nfolds = NULL,foldid = NULL,
                       RE_setup = NULL, V_setup = NULL, save_V_folder = NULL,
@@ -42,7 +41,7 @@ GridLMMnet = function(formula,data,X, X_ID = 'ID', weights = NULL,
   setup$h2s_matrix = setup_Grid(names(setup$V_setup$RE_setup),h2_step,h2_start)
   
   cl = start_cluster(mc.cores,clusterType)
-  setup$V_setup = calculate_Grid(setup$V_setup,setup$h2s_matrix,verbose)#,invIpKinv = T)
+  setup$V_setup = calculate_Grid(setup$V_setup,setup$h2s_matrix,verbose,invIpKinv = T)
   if(inherits(cl,"cluster")) stopCluster(cl)
 
   # ----------- run model ------------- #
@@ -51,17 +50,18 @@ GridLMMnet = function(formula,data,X, X_ID = 'ID', weights = NULL,
   lambda = setup$lambda
   if(is.null(lambda)) {
     cl = start_cluster(mc.cores,clusterType)
-    lambda = get_lambda_sequence(setup,alpha = alpha,lambdaType = lambdaType, scoreType = scoreType,nlambda = nlambda,lambda.min.ratio = lambda.min.ratio,verbose = verbose,...)
+    lambda = get_lambda_sequence(setup,alpha = alpha,nlambda = nlambda,lambda.min.ratio = lambda.min.ratio,verbose = verbose,...)
     if(inherits(cl,"cluster")) stopCluster(cl)
   }
   
   # run glmnet across the grid, including cross-validation
   cl = start_cluster(mc.cores,clusterType)
-  grid_results_list = run_GridLMMnet(setup,alpha = alpha,lambdaType = lambdaType, scoreType = scoreType,lambda = lambda,verbose = verbose,...)
+  grid_results_list = run_GridLMMnet(setup,alpha = alpha,lambda = lambda,verbose = verbose,...)
   if(inherits(cl,"cluster")) stopCluster(cl)
   
   # collect all results
   res = collect_results_GridLMMnet(setup,grid_results_list,lambda)
+  res$lambda = res$lambda * setup$sd_y^2
   
   return(res)
   
@@ -137,10 +137,11 @@ GridLMMnet_setup = function(formula,data,X, X_ID = 'ID', weights = NULL,
   }
   X_full = cbind(X_cov,X)
   
-  # center y going in - makes glmnet more stable
-  # don't need to standardize because that is done before running glmnet
+  # standardize y going in - makes glmnet more stable
   mean_y = mean(y)
-  y = (y-mean_y)
+  sd_y = 1#sd(y)*sqrt((n-1)/n)
+  y = (y-mean_y)/sd_y
+  # if(!is.null(lambda)) lambda = lambda * sd_y^2
   
   Qt = V_setup$Qt
   if(!is.null(Qt)){
@@ -156,6 +157,7 @@ GridLMMnet_setup = function(formula,data,X, X_ID = 'ID', weights = NULL,
     foldid = foldid,
     data = data,
     mean_y = mean_y,
+    sd_y = sd_y,
     weights = weights,
     lambda.min.ratio = eval(lambda.min.ratio),
     lambda = lambda,
@@ -168,76 +170,76 @@ GridLMMnet_setup = function(formula,data,X, X_ID = 'ID', weights = NULL,
 }
 
 
-# make_chol_V_setup = function(V_setup,h2s,invIpKinv = F){
-#   if(!is.null(V_setup$save_V_folder)) {
-#     chol_V_files = read.csv(sprintf('%s/chol_V_index.csv',V_setup$save_V_folder),stringsAsFactors = FALSE)
-#     if(nrow(chol_V_files)>0){
-#       # identify the chol_V_setup file with match h2s and load
-#       h2_matches = rowSums(abs(sweep(chol_V_files[,-1,drop=FALSE],2,h2s,'-')))
-#       h2_match = which(h2_matches<1e-10)
-#       if(length(h2_match) == 1){
-#         chol_V_setup = readRDS(chol_V_files$file[h2_match])
-#         return(chol_V_setup)
-#       }
-#     }
-#   }
-#   downdate_ratios = V_setup$downdate_ratios
-#   total_K = 0
-#   for(i in 1:length(h2s)) total_K = total_K + h2s[i] * as.matrix(V_setup$ZKZts[[i]]) * downdate_ratios[i]
-#   V = total_K + (1-sum(h2s)) * V_setup$resid_V
-#   # test if V is diagonal or sparse
-#   non_zero_upper_tri_V = abs(V[upper.tri(V,diag = FALSE)]) > 1e-10
-#   if(sum(non_zero_upper_tri_V) == 0) {  # V is diagonal
-#     chol_V = as(diag(sqrt(diag(V))),'CsparseMatrix')
-#   } else if(sum(non_zero_upper_tri_V) < length(non_zero_upper_tri_V) / 2) { # V is sparse
-#     V = Matrix(V)
-#     chol_V = as(chol(V),'CsparseMatrix')
-#   } else{ # V is dense, use Eigen LLT
-#     chol_V = chol_c(V)
-#   }
-#   if(inherits(chol_V,'dtCMatrix')) chol_V = as(chol_V,'dgCMatrix')
-#   V_log_det = 2*sum(log(diag(chol_V)))
-#   
-#   chol_V_setup = list(chol_V = chol_V,V_log_det = V_log_det, h2s = h2s)
-#   
-#   if(invIpKinv) {
-#     # want (I + e/aK^{-1})^{-1}
-#     # a/e*K - a/e*K(I+a/e*K)^{-1}a/e*K
-#     # V = e/(a+e)I+a/(a+e)K
-#     # (a+e)/eV = I+a/e*K
-#     # a/e*K - a/e*K(e/(a+e)*V^{-1})a/e*K
-#     # a/e*(K - e/(a+e)*(a/e)*crossprod(solve(t(R),K)))
-#     a = sum(h2s)
-#     e = 1-a
-#     h2 = sum(h2s)
-#     if(h2 == 0) {
-#       total_K = 0*total_K
-#     } else{ 
-#       total_K = total_K/h2
-#     }
-#     chol_V_setup$invIpKinv = (h2/(1-h2)*(total_K - h2* crossprod(solve(t(chol_V),total_K))))
-#     # sK = svd(K)
-#     if(sum(is.infinite(total_K))>0) recover()
-#     # chol_V_setup$sK <- svd(total_K)
-#     # chol_K = suppressWarnings(chol(total_K,pivot=T))
-#     if(h2 == 0) {
-#       chol_V_setup$L = matrix(0,nrow = nrow(total_K),ncol = 1)
-#     } else{
-#       ldlK = BSFG::LDLt(total_K)
-#       d = sum(ldlK$d > 1e-10)
-#       chol_V_setup$L = ldlK$P %*% ldlK$L[,1:d] %*% diag(sqrt(ldlK$d[1:d]))
-#     }
-#   }
-#   
-#   if(!is.null(V_setup$save_V_folder)) {
-#     # save chol_V_setup as a file, append the file to the chol_V_list csv
-#     chol_V_file = sprintf('%s/chol_V_%s.rds',V_setup$save_V_folder,paste(h2s,collapse='_'))
-#     saveRDS(chol_V_setup,file = chol_V_file)
-#     system(sprintf('echo "%s,%s" >> %s/chol_V_index.csv',chol_V_file,paste(h2s,collapse=','),V_setup$save_V_folder))
-#     chol_V_setup$file = chol_V_file
-#   }
-#   return(chol_V_setup)
-# }
+make_chol_V_setup = function(V_setup,h2s,invIpKinv = F){
+  if(!is.null(V_setup$save_V_folder)) {
+    chol_V_files = read.csv(sprintf('%s/chol_V_index.csv',V_setup$save_V_folder),stringsAsFactors = FALSE)
+    if(nrow(chol_V_files)>0){
+      # identify the chol_V_setup file with match h2s and load
+      h2_matches = rowSums(abs(sweep(chol_V_files[,-1,drop=FALSE],2,h2s,'-')))
+      h2_match = which(h2_matches<1e-10)
+      if(length(h2_match) == 1){
+        chol_V_setup = readRDS(chol_V_files$file[h2_match])
+        return(chol_V_setup)
+      }
+    }
+  }
+  downdate_ratios = V_setup$downdate_ratios
+  total_K = 0
+  for(i in 1:length(h2s)) total_K = total_K + h2s[i] * as.matrix(V_setup$ZKZts[[i]]) * downdate_ratios[i]
+  V = total_K + (1-sum(h2s)) * V_setup$resid_V
+  # test if V is diagonal or sparse
+  non_zero_upper_tri_V = abs(V[upper.tri(V,diag = FALSE)]) > 1e-10
+  if(sum(non_zero_upper_tri_V) == 0) {  # V is diagonal
+    chol_V = as(diag(sqrt(diag(V))),'CsparseMatrix')
+  } else if(sum(non_zero_upper_tri_V) < length(non_zero_upper_tri_V) / 2) { # V is sparse
+    V = Matrix(V)
+    chol_V = as(chol(V),'CsparseMatrix')
+  } else{ # V is dense, use Eigen LLT
+    chol_V = chol_c(V)
+  }
+  if(inherits(chol_V,'dtCMatrix')) chol_V = as(chol_V,'dgCMatrix')
+  V_log_det = 2*sum(log(diag(chol_V)))
+  
+  chol_V_setup = list(chol_V = chol_V,V_log_det = V_log_det, h2s = h2s)
+  
+  if(invIpKinv) {
+    # want (I + e/aK^{-1})^{-1}
+    # a/e*K - a/e*K(I+a/e*K)^{-1}a/e*K
+    # V = e/(a+e)I+a/(a+e)K
+    # (a+e)/eV = I+a/e*K
+    # a/e*K - a/e*K(e/(a+e)*V^{-1})a/e*K
+    # a/e*(K - e/(a+e)*(a/e)*crossprod(solve(t(R),K)))
+    a = sum(h2s)
+    e = 1-a
+    h2 = sum(h2s)
+    if(h2 == 0) {
+      total_K = 0*total_K
+    } else{ 
+      total_K = total_K/h2
+    }
+    chol_V_setup$invIpKinv = (h2/(1-h2)*(total_K - h2* crossprod(solve(t(chol_V),total_K))))
+    # sK = svd(K)
+    if(sum(is.infinite(total_K))>0) recover()
+    # chol_V_setup$sK <- svd(total_K)
+    # chol_K = suppressWarnings(chol(total_K,pivot=T))
+    if(h2 == 0) {
+      chol_V_setup$L = matrix(0,nrow = nrow(total_K),ncol = 1)
+    } else{
+      ldlK = BSFG::LDLt(total_K)
+      d = sum(ldlK$d > 1e-10)
+      chol_V_setup$L = ldlK$P %*% ldlK$L[,1:d] %*% diag(sqrt(ldlK$d[1:d]))
+    }
+  }
+  
+  if(!is.null(V_setup$save_V_folder)) {
+    # save chol_V_setup as a file, append the file to the chol_V_list csv
+    chol_V_file = sprintf('%s/chol_V_%s.rds',V_setup$save_V_folder,paste(h2s,collapse='_'))
+    saveRDS(chol_V_setup,file = chol_V_file)
+    system(sprintf('echo "%s,%s" >> %s/chol_V_index.csv',chol_V_file,paste(h2s,collapse=','),V_setup$save_V_folder))
+    chol_V_setup$file = chol_V_file
+  }
+  return(chol_V_setup)
+}
 
 
 calculate_Grid = function(V_setup,h2s_matrix,verbose = TRUE,invIpKinv = F){
@@ -249,7 +251,7 @@ calculate_Grid = function(V_setup,h2s_matrix,verbose = TRUE,invIpKinv = F){
   
   V_setup$chol_V_list = foreach(h2s = iter(t(h2s_matrix),by='row')) %dopar% {
     h2s = h2s[1,]
-    chol_V_setup = make_chol_V_setup(V_setup,h2s)#,invIpKinv)
+    chol_V_setup = make_chol_V_setup(V_setup,h2s,invIpKinv)
     if(!is.null(V_setup$save_V_folder)) chol_V_setup = chol_V_setup$file  # only store file name if save_V_folder is provided
     if(verbose && exists('pb')) setTxtProgressBar(pb, getTxtProgressBar(pb)+1)
     return(chol_V_setup)
@@ -260,20 +262,11 @@ calculate_Grid = function(V_setup,h2s_matrix,verbose = TRUE,invIpKinv = F){
 }
 
 
-run_glmnet_V = function(X_full,y, chol_V_setup, alpha = alpha, lambdaType = 's2e', scoreType = 'LL',
+run_glmnet_V = function(X_full,y, chol_V_setup, alpha = alpha, 
                         lambda = NULL,nlambda, lambda.min.ratio,get_max_lambda = FALSE,penalty.factor,holdOut = NULL,...){
-  # recover()
   nobs = length(y)
   h2 = sum(chol_V_setup$h2s)
-  # if(h2 > 0) recover()
-  # print(lambdaType)
-  if(scoreType == 's2g') stop('scoreType == s2g not working yet')
-  chol_V = chol_V_setup$chol_V
-  chol_V = switch(lambdaType,
-                  s2e = chol_V / sqrt(1-h2),
-                  s2p = chol_V,
-                  s2g = chol_V / sqrt(h2)
-                  )
+  chol_V = chol_V_setup$chol_V / sqrt(1-h2)
   
   if(!is.null(holdOut)){
     if(length(holdOut) != nobs) stop('wrong length of foldid')
@@ -295,7 +288,7 @@ run_glmnet_V = function(X_full,y, chol_V_setup, alpha = alpha, lambdaType = 's2e
   chol_V_inv = as.matrix(solve(chol_V))
   
   # penalty = tr_Vinv / nobs * lambda
-  # tr_Vinv = sum(chol_V_inv^2)
+  tr_Vinv = sum(chol_V_inv^2)
   
   y_star = crossprod_cholR(chol_V_inv,y)
   X_star = crossprod_cholR(chol_V_inv,X_full)
@@ -323,15 +316,15 @@ run_glmnet_V = function(X_full,y, chol_V_setup, alpha = alpha, lambdaType = 's2e
     if(any(penalty.factor == 0)) {
       resid_y_star = resid(lm(y_star~X_star[,penalty.factor == 0]))
     }
-    s2_hat = sum(resid_y_star^2)/(nobs + p + alpha*p)
-    # Note: if alpha = 0 (Ridge), should be nobs + p. If alpha = 1 (Lasso), should be nobs + 2*p. 
-    # This is a guess of the intermediate value.
+    s2_hat = sum(resid_y_star^2)/nobs
     
     # Note: if alpha == 0, this fails. Set alpha = max(alpha,0.01)
     alpha = max(alpha,0.001)
 
+    # max_lambda = nobs/tr_Vinv*max(penalty.factor*sum(penalty.factor)/(length(penalty.factor)-1)*abs(t(resid_y_star) %*% X_star ) / ( alpha * nobs))
     max_lambda = max(penalty.factor*sum(penalty.factor)/(length(penalty.factor)-1)*abs(t(resid_y_star) %*% X_star ) / ( alpha * nobs))
-    score = (nobs + p + alpha*p)*log(s2_hat) + V_log_det
+    # max_lambda = 1/(1-h2)*max(penalty.factor*sum(penalty.factor)/(length(penalty.factor)-1)*abs(t(resid_y_star) %*% X_star ) / ( alpha * nobs))
+    score = nobs*log(2*pi) + nobs*log(s2_hat) + V_log_det + nobs 
     return(c(max_lambda=max_lambda,score=score))
   }
   
@@ -350,6 +343,7 @@ run_glmnet_V = function(X_full,y, chol_V_setup, alpha = alpha, lambdaType = 's2e
     # run with standardized data, then adjust lambda for V_1.
     res = glmnet(X_star/sd_y_star,y_star/sd_y_star,family = 'gaussian',weights = rep(1,length(y_star)),penalty.factor = penalty.factor,
                  alpha = alpha, nlambda = nlambda, lambda.min.ratio = lambda.min.ratio,intercept = intercept,standardize = FALSE,...)
+    # lambda = nobs / tr_Vinv * res$lambda * sd_y_star^2
     lambda = res$lambda * sd_y_star^2
     # alternatively, use family = 'mgaussian' and standarize.response = F
     # res = glmnet(X_star,y_star,family = 'mgaussian',weights = rep(1,length(y_star)),penalty.factor = penalty.factor,standardize.response = F,
@@ -357,8 +351,15 @@ run_glmnet_V = function(X_full,y, chol_V_setup, alpha = alpha, lambdaType = 's2e
     # class(res)[1] = 'elnet' # so we can use plot.elnet
     # lambda = res$lambda
   } else{
+    # lambda = lambda * ci
+    # res = glmnet(X_star/sd_y_star,y_star/sd_y_star,family = 'gaussian',weights = rep(1,length(y_star)),penalty.factor = penalty.factor,
+    #              alpha = alpha, lambda = tr_Vinv / nobs * lambda/sd_y_star^2 ,intercept = intercept,standardize = FALSE,...)
     res = glmnet(X_star/sd_y_star,y_star/sd_y_star,family = 'gaussian',weights = rep(1,length(y_star)),#penalty.factor = penalty.factor,
                  alpha = alpha, lambda = lambda/sd_y_star^2,intercept = intercept,standardize = FALSE,...)
+    # res = glmnet(X_star/sd_y_star,y_star/sd_y_star,family = 'gaussian',weights = rep(1,length(y_star)),penalty.factor = penalty.factor,
+    #              alpha = alpha, lambda = lambda/sd_y_star^2,intercept = intercept,standardize = FALSE,...)
+    # res = glmnet(X_star/sd_y_star,y_star/sd_y_star,family = 'gaussian',weights = rep(1,length(y_star)),penalty.factor = penalty.factor,
+    #              alpha = alpha, lambda = lambda/sd_y_star^2*(1-h2) ,intercept = intercept,standardize = FALSE,...)
     # alternatively, use family = 'mgaussian' and standarize.response = F
     # res = glmnet(X_star,y_star,family = 'mgaussian',weights = rep(1,length(y_star)),penalty.factor = penalty.factor,standardize.response = F,
     #               alpha = alpha, lambda = lambda,intercept = intercept,standardize = FALSE,...)
@@ -374,48 +375,167 @@ run_glmnet_V = function(X_full,y, chol_V_setup, alpha = alpha, lambdaType = 's2e
   RSSs = colSums(errors^2)
   # recover()
   penalty.factor = penalty.factor*(length(penalty.factor)-1)/sum(penalty.factor) # adjust penalty.factor to sum to p-1 (for intercept)
+  # penalty.factor = penalty.factor*(length(penalty.factor))/sum(penalty.factor) # adjust penalty.factor to sum to p-1 (for intercept)
   penalties = colSums(penalty.factor*((1-alpha)/2*res$beta^2 + alpha*abs(res$beta)))# from: https://web.stanford.edu/~hastie/glmnet/glmnet_alpha.html
   
-  s2_hats = (RSSs + 2*nobs*lambda*penalties)/(nobs+p + alpha*p)
-  score = 0
-  if(scoreType == 'LL') {
-    scores = (nobs + p + alpha*p)*log(s2_hats) + V_log_det
-  } else if(scoreType == 'GCV') {
-    if(alpha == 1) {
-      # LASSO
-      qt = Calculate_qt_LASSO(X_star,as.matrix(res$beta),res$lambda)
-      n0 = colSums(res$beta == 0)
-      scores = 1/nobs*RSSs/(1-(qt-n0)/n)^2
-      # recover()
-      scores = (nobs+2*(qt-n0))*log(scores) + V_log_det + (RSSs + 2*nobs*lambda*penalties)/scores
-    } else if(alpha == 0) {
-      # Ridge
-      sX = svd(X_star)
-      qt = sapply(res$lambda,function(l) {
-        S = X_star %*% sX$u * (1/(sX$d^2 + nobs*l)*t(sX$u)) %*% t(X_star)
-        sum(diag(S))
-      })
-      scores = 1/nobs*RSSs/(1-(qt)/n)^2
-    } else {
-      stop("GCV not implemented for alpha between 0 and 1")
-    }
-  } else if(scoreType == 'marginal_LL') {
-    if(alpha != 0) stop("marginal_LL only implemented for Ridge (alpha = 0")
-    scX = svd(X_star)
-    d = scX$d
-    if(length(d) < p) d = c(d,rep(0,(p-length(d))))
-    dets = dets + (1-alpha)*sapply(lambda,function(l) {
-      # determinant(diag(1,p) + diag(d^2/(nobs*l)))$modulus
-      # sum(log(1+d^2/(tr_Vinv*l)))
-      sum(log(1+d^2/(nobs*l)))
-    })
-    scores = (nobs*log(2*pi) + nobs*log(s2_hats) + V_log_det + nobs + dets)
-  } else if(scoreType == 'REML') {
-    
-  } else{
-    scores = rep(NA,length(lambda))
-  }
+  # V = a/(a+e)*K + e/(a+e)I
+  # (a+e)V = aK+eI
+  # V2 = a/e K + I
+  # eV2 = aK + eI
+  # V2 = (a+e)/e * V = 1/(1-h2)*V
   
+  dets=0
+  # recover()
+  # s2_hats = (RSSs + 2*tr_Vinv*lambda*penalties)/nobs
+  # s2_hats = (RSSs + 2*nobs*lambda*penalties)/nobs
+  # scores = (nobs*log(2*pi) + nobs*log(s2_hats) + V_log_det + nobs)
+  
+  s2_hats = (RSSs + 2*nobs*lambda*penalties)/(nobs+2*p)
+  scores = (nobs+2*p)*log(s2_hats) + V_log_det
+  
+  #GCV
+  # 1/nRSS/(1-q/n)^2
+  #q = tr(X(XtX+lambdaW-)^{-1}Xt)
+  # recover()
+  # qt = sapply(seq_along(lambda),function(i) {
+  #   XWXt = 1/lambda[i]*X_star %*% (abs(res$beta[,i])*t(X_star))
+  #   H = XWXt - XWXt %*% solve(XWXt+diag(1,nobs),XWXt)
+  #   sum(diag(H))
+  # })
+  # k = colSums(res$beta != 0)
+  # scores = 1/nobs*RSSs/(1-qt/n)^2
+  
+  # scX = svd(X_star)
+  # k = pmin(colSums(res$beta != 0),nobs)
+  # k = ncol(X_star)
+  # s2_hats = (RSSs + 2*nobs*lambda*penalties)/(nobs-k)
+  # dets = 2*sum(log(scX$d[scX$d > 1e-10]))
+  # scores = (nobs-k)*log(s2_hats) + V_log_det + nobs - k + dets
+  
+  # s2_hats = ((1-h2)*RSSs + 2*nobs*lambda*penalties)/nobs
+  # scores = (nobs*log(2*pi) + nobs*log(s2_hats) + V_log_det + nobs - nobs*log(1-h2))
+  # cXs = crossprod(X_star)
+  # tcXs = tcrossprod(X_full)
+  # V = crossprod(chol_V)
+  # dets = sapply(lambda,function(l)  {
+  #   if(nobs > p) {
+  #     -V_log_det + determinant(V + tcXs/(nobs*l))$modulus
+  #   } else {
+  #     determinant(diag(1,ncol(X_full)) + cXs/(nobs*l))$modulus
+  #   }
+  #   })
+  # dets=0
+  # dets=0
+  
+  # # The following seems to be right for ridge, but not lasso.
+  # dets = 0
+  # if(alpha < 1) {
+  #   scX = svd(X_star)
+  #   d = scX$d
+  #   if(length(d) < p) d = c(d,rep(0,(p-length(d))))
+  #   dets = dets + (1-alpha)*sapply(lambda,function(l) {
+  #     # determinant(diag(1,p) + diag(d^2/(nobs*l)))$modulus
+  #     # sum(log(1+d^2/(tr_Vinv*l)))
+  #     sum(log(1+d^2/(nobs*l)))
+  #   })
+  # }
+  # if(alpha > 0) {
+  #   dets = dets + alpha * sapply(seq_along(lambda),function(i) {
+  #     coefs = which(res$beta[,i] != 0)
+  #     s_Xi = svd(X_full[,coefs])
+  #     s_Xstari = svd(X_star[,coefs])
+  #     2*sum(log(s_Xstari$d))# - 2*sum(log(s_Xi$d))
+  #   })
+  # }
+  # # s2_hats = (RSSs + 2*tr_Vinv*lambda*penalties)/nobs
+  # s2_hats = (RSSs + 2*nobs*lambda*penalties)/nobs
+  # scores = (nobs*log(2*pi) + nobs*log(s2_hats) + V_log_det + nobs + dets)
+  # 
+  
+  # The following is trying to derive it from the posterior
+  # XtX = crossprod(X_star)
+  # dets1 = sapply(lambda,function(l) {
+  #     XtXi = XtX
+  #     diag(XtXi) = diag(XtXi) + 2*nobs*l
+  #     determinant(XtXi)$mod
+  # })
+  # d = scX$d
+  # if(length(d) < p) d = c(d,rep(0,(p-length(d))))
+  # # if(length(d) < n) d = c(d,rep(0,(n-length(d))))
+  # dets = sapply(lambda,function(l) {
+  #   sum(log(d^2 + nobs*l))
+  # })
+  # Vtb = t(scX$v) %*% res$beta
+  # # mod_penalties1 = sapply(seq_along(lambda),function(i) {
+  # #   XtXi = XtX
+  # #   diag(XtXi) = diag(XtXi) + 2*nobs*lambda[i]
+  # #   matrix(res$beta[,i],nr=1) %*% XtXi %*% res$beta[,i]
+  # # })
+  # mod_penalties = sapply(seq_along(lambda),function(i) {
+  #   # XtXi = XtX
+  #   # diag(XtXi) = diag(XtXi) + 2*nobs*lambda[i]
+  #   # matrix(res$beta[,i],nr=1) %*% solve(XtXi,res$beta[,i])
+  #   sum(((sqrt(scX$d^2 + nobs*lambda[i]))*Vtb[,i])^2)
+  # })
+  # # recover()
+  # s2_hats = (sum(y_star^2) - mod_penalties)/nobs
+  # scores = nobs*log(2*pi) + nobs*log(s2_hats) + nobs + V_log_det + dets - p*log(n*lambda)
+  # s2_hats = (RSSs + 2*nobs*lambda*penalties)/nobs
+  # s2_hats = (RSSs + 2*nobs*lambda*penalties + mod_penalties)/(p)
+  # scores = ((p)*log(2*pi) + (p)*log(s2_hats) + nobs +dets) #+ V_log_det
+
+  # try using maximum of random effects
+  # recover()
+  # e = y[,1] - as.matrix(X_full %*% res$beta)
+  # s2_e = s2_hats#*(1-sum(chol_V_setup$h2s))
+  # s2_a = s2_hats*h2/(1-h2)
+  # s2_e = s2_hats*(1-h2)
+  # s2_a = s2_hats*h2
+  
+   # recover()
+  # scores = n*log(s2_e) + n*log(s2_a) +V_log_det + (colSums(e^2) - diag(t(e) %*% chol_V_setup$invIpKinv %*% e))/(s2_e) + 2*nobs*lambda*penalties/s2_hats
+  # scores = nobs*log(s2_e) + nobs*log(s2_a) + colSums(e^2)/s2_e - diag(t(e) %*% chol_V_setup$invIpKinv %*% e)/s2_e + 2*nobs*lambda*penalties/s2_hats
+  # recover()
+  # try({
+  # b2 = solve(t(X_full) %*% X_full + diag(s2_e/s2_a,ncol(X_full)),t(X_full) %*% e)
+  # res$beta = res$beta + b2
+  # })
+  # d = chol_V_setup$sK$d
+  # k = sum(d > 1e-10)
+  # d = d[1:k]
+  # U = chol_V_setup$sK$u[,1:k]
+  # Z = t(sqrt(d)*t(U))
+  # b = 1/(diag(crossprod(Z)) + (1-h2)/h2) * t(Z) %*% e 
+  # e2 = e - Z %*% b
+  # scores = nobs*log(s2_e) + k*log(s2_a) + colSums(e2)/s2_e + colSums(b^2)/s2_a
+  
+  # if(h2 > 0) {
+  #   k = ncol(chol_V_setup$L)
+  #   b = solve(crossprod(chol_V_setup$L) + diag((1-h2)/h2,ncol(chol_V_setup$L)),crossprod(chol_V_setup$L,e))
+  #   e2 = e - chol_V_setup$L %*% b
+  #   scores = nobs*log(s2_e)+ k*log(s2_a) + (colSums(e2^2) + 2*nobs*lambda*penalties)/s2_e + colSums(b^2)/s2_a
+  # } else {
+  #   scores = nobs*log(s2_e) + (colSums(e^2) + 2*nobs*lambda*penalties)/s2_e
+  # }
+  
+  # yty-2yta+ata + atKinva
+  # yty - 2ytWy + at(I+Kinv)a
+  # yty - 2ytWy + ytWy
+  # 1/s2b = 1/s2*(s2/s2b) = lambda/s2
+  # 1/eI + 1/aKinv
+  # 1/e(I+e/aKinv)
+  # a_hat = (I+e/a*Kinv)^{-1}e
+  #the following is an attempt for lasso, but doesn't seem to work
+  # dets = sapply(seq_along(lambda),function(i)  {
+  #   j = res$beta[,i] != 0 & penalty.factor > 0
+  #   determinant(diag(1,sum(j)) + crossprod(X_star[,j])/(tr_Vinv*lambda[i]))$modulus
+  # })
+  # 
+  # scores = (nobs*log(2*pi) + nobs*log(s2_hats) + V_log_det + nobs + dets)
+  # # scores = ((nobs+p)*log(2*pi) + (nobs+p)*log(s2_hats) + V_log_det + nobs - p*log(nobs/(lambda*tr_Vinv)))
+  # s2_hats = (RSSs + 2*nobs*lambda*penalties)/(nobs+p)
+  # scores = ((nobs+p)*log(2*pi) + (nobs+p)*log(s2_hats) + V_log_det + nobs - p*log(1/(2*nobs*lambda)))
+# recover()
   # predicting in held-out set
   prediction_errors = NULL
   if(!is.null(holdOut)){
@@ -427,12 +547,12 @@ run_glmnet_V = function(X_full,y, chol_V_setup, alpha = alpha, lambdaType = 's2e
     prediction_errors = y_sub - predicted
   }
   return(list(V_log_det = V_log_det,res.glmnet = res,scores = scores, lambda = lambda,
-              deviance = RSSs,null_deviance = sum((y_star-mean(y_star))^2),s2 = s2_hats,#dets = dets,
+              deviance = RSSs,null_deviance = sum((y_star-mean(y_star))^2),s2 = s2_hats,dets = dets,
               prediction_errors = prediction_errors))
 }
 
 
-get_lambda_sequence = function(setup,alpha = 1,lambdaType = 's2e', scoreType = 'LL',nlambda = 100,lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001),verbose = TRUE,...) {
+get_lambda_sequence = function(setup,alpha = 1,nlambda = 100,lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001),verbose = TRUE,...) {
   
   y = setup$y
   X_full = setup$X_full
@@ -448,7 +568,7 @@ get_lambda_sequence = function(setup,alpha = 1,lambdaType = 's2e', scoreType = '
     if(is.character(chol_V_setup)) {
       chol_V_setup <- readRDS(chol_V_setup)
     }
-    run_glmnet_V(X_full,y,chol_V_setup,alpha = alpha,lambdaType = lambdaType, scoreType = scoreType,get_max_lambda = TRUE,penalty.factor=penalty.factor,...)
+    run_glmnet_V(X_full,y,chol_V_setup,alpha = alpha,get_max_lambda = TRUE,penalty.factor=penalty.factor,...)
   }
   results_prep = as.matrix(results_prep,nrow = length(chol_V_list))
   max_lambda = max(results_prep[,1])#results_prep[order(results_prep[,'score'])[1],'max_lambda']
@@ -460,7 +580,7 @@ get_lambda_sequence = function(setup,alpha = 1,lambdaType = 's2e', scoreType = '
 }
 
 
-run_GridLMMnet = function(setup,alpha = 1,lambdaType = 's2e', scoreType = 'LL',lambda,verbose = TRUE,...) {
+run_GridLMMnet = function(setup,alpha = 1,lambda,verbose = TRUE,...) {
   y = setup$y
   X_full = setup$X_full
   foldid = setup$foldid
@@ -476,14 +596,13 @@ run_GridLMMnet = function(setup,alpha = 1,lambdaType = 's2e', scoreType = 'LL',l
     if(is.character(chol_V_setup)) {
       chol_V_setup <- readRDS(chol_V_setup)
     }
-    res = run_glmnet_V(X_full,y,chol_V_setup,alpha = alpha,lambdaType = lambdaType, scoreType = scoreType,lambda=lambda,penalty.factor=penalty.factor,...)
+    res = run_glmnet_V(X_full,y,chol_V_setup,alpha = alpha,lambda=lambda,penalty.factor=penalty.factor,...)
     res$h2_index = h2_index
     if(!is.null(foldid)){
       nfolds = max(foldid)
       res_list = foreach::foreach(i = seq(nfolds)) %do% {
         holdOut = foldid == i
-        # no point in other scoreType here
-        res_i = run_glmnet_V(X_full,y,chol_V_setup,alpha = alpha,lambdaType = lambdaType, scoreType = 'LL',lambda=lambda,penalty.factor=penalty.factor,holdOut = holdOut,...)
+        res_i = run_glmnet_V(X_full,y,chol_V_setup,alpha = alpha,lambda=lambda,penalty.factor=penalty.factor,holdOut = holdOut,...)
         return(res_i[c('scores','prediction_errors')])
       }
       res$cv_scores = sapply(res_list,function(x) x$scores)  # score for each fold for each lambda
@@ -502,7 +621,7 @@ run_GridLMMnet = function(setup,alpha = 1,lambdaType = 's2e', scoreType = 'LL',l
 
 collect_results_GridLMMnet = function(setup,results,lambda) {
   mean_y = setup$mean_y
-  sd_y = 1#setup$sd_y
+  sd_y = setup$sd_y
   h2s_matrix = setup$h2s_matrix
   foldid = setup$foldid
   prediction_weights = setup$weights
@@ -513,7 +632,6 @@ collect_results_GridLMMnet = function(setup,results,lambda) {
   ## select the best model by minimum score
   # recover()
   if(is.null(foldid)) {
-    # recover()
     scores = sapply(results,function(x) x$scores)
     min_score_index = apply(scores,1,which.min)
     min_scores = sapply(seq_along(lambda),function(i) scores[i,min_score_index[i]])

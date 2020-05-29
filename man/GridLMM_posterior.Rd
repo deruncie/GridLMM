@@ -4,11 +4,25 @@
 \alias{GridLMM_posterior}
 \title{Evaluate the posterior of a linear mixed model using the Grid-sampling algorithm}
 \usage{
-GridLMM_posterior(formula, data, weights = NULL, relmat = NULL,
-  h2_divisions = 10, h2_prior = function(h2s, n) 1/n, a = 0, b = 0,
-  inv_prior_X = 0, target_prob = 0.99, thresh_nonzero = 10,
-  thresh_nonzero_marginal = 0, V_setup = NULL, save_V_folder = NULL,
-  diagonalize = T, mc.cores = my_detectCores(), verbose = T)
+GridLMM_posterior(
+  formula,
+  data,
+  weights = NULL,
+  relmat = NULL,
+  h2_divisions = 10,
+  h2_prior = function(h2s, n) 1/n,
+  a = 0,
+  b = 0,
+  inv_prior_X = 0,
+  target_prob = 0.99,
+  thresh_nonzero = 10,
+  thresh_nonzero_marginal = 0,
+  V_setup = NULL,
+  save_V_folder = NULL,
+  diagonalize = T,
+  mc.cores = my_detectCores(),
+  verbose = T
+)
 }
 \arguments{
 \item{formula}{A two-sided linear formula as used in \code{\link[lme4]{lmer}} describing the fixed-effects

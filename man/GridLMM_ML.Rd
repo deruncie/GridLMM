@@ -4,10 +4,21 @@
 \alias{GridLMM_ML}
 \title{Find the (Restricted) Maximim Likelihood solution to a linear mixed model by grid search}
 \usage{
-GridLMM_ML(formula, data, weights = NULL, relmat = NULL,
-  initial_step = 0.5, tolerance = 0.01, ML = T, REML = T,
-  V_setup = NULL, save_V_folder = NULL, diagonalize = T,
-  mc.cores = my_detectCores(), verbose = T)
+GridLMM_ML(
+  formula,
+  data,
+  weights = NULL,
+  relmat = NULL,
+  initial_step = 0.5,
+  tolerance = 0.01,
+  ML = T,
+  REML = T,
+  V_setup = NULL,
+  save_V_folder = NULL,
+  diagonalize = T,
+  mc.cores = my_detectCores(),
+  verbose = T
+)
 }
 \arguments{
 \item{formula}{A two-sided linear formula as used in \code{\link[lme4]{lmer}} describing the fixed-effects
