@@ -387,7 +387,7 @@ run_glmnet_V = function(X_full,y, chol_V_setup, alpha = alpha, lambdaType = 's2e
       n0 = colSums(res$beta == 0)
       scores = 1/nobs*RSSs/(1-(qt-n0)/n)^2
       # recover()
-      scores = (nobs+2*(qt-n0))*log(scores) + V_log_det + (RSSs + 2*nobs*lambda*penalties)/scores
+      # scores = (nobs+2*(qt-n0))*log(scores) + V_log_det + (RSSs + 2*nobs*lambda*penalties)/scores
     } else if(alpha == 0) {
       # Ridge
       sX = svd(X_star)
