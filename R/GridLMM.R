@@ -60,7 +60,8 @@
 #' \item{V_setup}{The \code{V_setup} object for this model. Can be re-passed to this function (or other GridLMM functions) to re-fit the model to the same data.}
 #' @export
 #'
-GridLMM_posterior = function(formula,data,weights = NULL,relmat = NULL,  
+GridLMM_posterior = function(formula,data,weights = NULL,relmat = NULL, 
+                             normalize_relmat = TRUE, 
                   h2_divisions = 10,
                   h2_prior = function(h2s,n) 1/n, a = 0, b = 0, inv_prior_X = 0,
                   target_prob = 0.99, # want this much probability to be distributed over at least thresh_nonzero grid squares 
@@ -69,7 +70,7 @@ GridLMM_posterior = function(formula,data,weights = NULL,relmat = NULL,
                   diagonalize=T,mc.cores = my_detectCores(),verbose=T) {
  
   MM = prepMM(formula,data,weights,other_formulas = NULL,
-              relmat,X=NULL,X_ID=NULL,proximal_markers=NULL,V_setup,diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
+              relmat,normalize_relmat,X=NULL,X_ID=NULL,proximal_markers=NULL,V_setup,diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
   lmod = MM$lmod
   RE_setup = MM$RE_setup
   V_setup = MM$V_setup
@@ -228,13 +229,13 @@ GridLMM_posterior = function(formula,data,weights = NULL,relmat = NULL,
 #' \item{V_setup}{The \code{V_setup} object for this model. Can be re-passed to this function (or other GridLMM functions) to re-fit the model to the same data.}
 #' @export
 #'
-GridLMM_ML = function(formula,data,weights = NULL,relmat = NULL,  
+GridLMM_ML = function(formula,data,weights = NULL,relmat = NULL,  normalize_relmat = TRUE, 
                      initial_step = 0.5,tolerance = 0.01,ML = T,REML=T,
                      V_setup = NULL, save_V_folder = NULL, # character vector giving folder name to save V_list
                      diagonalize=T,mc.cores = my_detectCores(),verbose=T) {
  
   MM = prepMM(formula,data,weights,other_formulas = NULL,
-              relmat,X=NULL,X_ID=NULL,proximal_markers=NULL,V_setup,diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
+              relmat,normalize_relmat, X=NULL,X_ID=NULL,proximal_markers=NULL,V_setup,diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
   lmod = MM$lmod
   RE_setup = MM$RE_setup
   V_setup = MM$V_setup

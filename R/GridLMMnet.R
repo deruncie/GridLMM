@@ -16,7 +16,7 @@
 #' @export
 #'
 GridLMMnet = function(formula,data,X, X_ID = 'ID', weights = NULL, 
-                      centerX = TRUE,scaleX = TRUE,relmat = NULL,
+                      centerX = TRUE,scaleX = TRUE,relmat = NULL,normalize_relmat = TRUE,
                       h2_step = 0.1, h2_start = NULL,
                       alpha = 1, lambdaType = 's2e', scoreType = 'LL',
                       nlambda = 100, lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001), lambda=NULL,
@@ -28,7 +28,7 @@ GridLMMnet = function(formula,data,X, X_ID = 'ID', weights = NULL,
   
   # ----------- setup model ------------- #
   setup = GridLMMnet_setup(formula,data,X,X_ID, weights,
-                           centerX,scaleX,relmat,
+                           centerX,scaleX,relmat,normalize_relmat,
                            alpha,nlambda,substitute(lambda.min.ratio),lambda,
                            penalty.factor,
                            nfolds,foldid,
@@ -69,7 +69,7 @@ GridLMMnet = function(formula,data,X, X_ID = 'ID', weights = NULL,
 }
 
 GridLMMnet_setup = function(formula,data,X, X_ID = 'ID', weights = NULL, 
-                            centerX = TRUE,scaleX = TRUE,relmat = NULL,
+                            centerX = TRUE,scaleX = TRUE,relmat = NULL,normalize_relmat = TRUE,
                             alpha = 1, nlambda = 100, lambda.min.ratio = ifelse(nobs<nvars,0.01,0.0001), lambda=NULL,
                             penalty.factor = NULL,
                             nfolds = NULL,foldid = NULL,
@@ -106,7 +106,7 @@ GridLMMnet_setup = function(formula,data,X, X_ID = 'ID', weights = NULL,
   }
   # -------- prep Mixed Models ---------- #
   MM = prepMM(formula,data,weights,other_formulas = NULL,
-              relmat,X,X_ID,proximal_markers=NULL,V_setup,diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
+              relmat,normalize_relmat,X,X_ID,proximal_markers=NULL,V_setup,diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
   lmod = MM$lmod
   RE_setup = MM$RE_setup
   V_setup = MM$V_setup
