@@ -25,7 +25,8 @@ Imports:
     parallel,
     foreach,
     iterators,
-    itertools
+    itertools,
+    RcppParallel
 LinkingTo: Rcpp, RcppEigen
 ByteCompile: TRUE
 RoxygenNote: 7.1.1
