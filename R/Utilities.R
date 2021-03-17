@@ -1,5 +1,5 @@
 prepMM = function(formula,data,weights = NULL,other_formulas = NULL,
-                  relmat = NULL, X = NULL, X_ID = 'ID',proximal_markers = NULL,V_setup = NULL,
+                  relmat = NULL, normalize_relmat = TRUE, X = NULL, X_ID = 'ID',proximal_markers = NULL,V_setup = NULL,
                   diagonalize = TRUE,svd_K = TRUE,drop0_tol = 1e-10,save_V_folder = NULL,
                   verbose = TRUE) {
   
@@ -129,7 +129,7 @@ prepMM = function(formula,data,weights = NULL,other_formulas = NULL,
       }
       
     }  
-    V_setup = make_V_setup(RE_setup,weights,diagonalize,svd_K = TRUE,drop0_tol = 1e-10,save_V_folder,verbose)
+    V_setup = make_V_setup(RE_setup,normalize_relmat,weights,diagonalize,svd_K = TRUE,drop0_tol = 1e-10,save_V_folder,verbose)
   } else{
     RE_setup = V_setup$RE_setup
   }
@@ -138,6 +138,7 @@ prepMM = function(formula,data,weights = NULL,other_formulas = NULL,
 }
 
 make_V_setup = function(RE_setup,
+                        normalize_relmat = TRUE,
                         weights = NULL,
                         diagonalize = TRUE,
                         svd_K = TRUE, # should the svd of one of the random effect covariances be calculated?
@@ -224,6 +225,7 @@ make_V_setup = function(RE_setup,
     # ZKZts[[re]] = forceSymmetric(drop0(QtZ_matrices[[re]] %*% RE_setup[[re]]$K %*% t(QtZ_matrices[[re]]),tol = drop0_tol))
     # ZKZts[[re]] = as.matrix(forceSymmetric(drop0(QtZ_matrices[[re]] %*% RE_setup[[re]]$K %*% t(QtZ_matrices[[re]]),tol = drop0_tol)))
     ZKZts[[re]] = QtZ_matrices[[re]] %*% RE_setup[[re]]$K %*% t(QtZ_matrices[[re]])
+    if(normalize_relmat) ZKZts[[re]] = ZKZts[[re]]/mean(diag(ZKZts[[re]]))
   }
   
   

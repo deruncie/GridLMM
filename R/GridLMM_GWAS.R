@@ -54,6 +54,7 @@
 #'         used to estimate the covariance matrix. This is used for appropriate downdating of \code{V} to remove proximal markers for each test.
 #'     The names of the matrices / list elements should correspond to the columns in \code{data} that are used as grouping factors. All levels
 #'     of the grouping factor should appear as rownames of the corresponding matrix.
+#' @param normalize_relmat should ZKZt matrices be normalized so that mean(diag) == 1? Default (true)
 #' @param h2_step Step size of the grid
 #' @param h2_start Optional. Matrix with each row a vector of \eqn{h^2} parameters defining starting values for the grid. 
 #'     Typically ML/REML solutions for the null model. 
@@ -92,7 +93,7 @@
 #' 
 GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,weights = NULL,
                          X,X_ID = 'ID',
-                         centerX = FALSE,scaleX = FALSE,fillNAX = FALSE,X_map = NULL, relmat = NULL,
+                         centerX = FALSE,scaleX = FALSE,fillNAX = FALSE,X_map = NULL, relmat = NULL, normalize_relmat = TRUE,
                          h2_step = 0.01, h2_start = NULL, h2_start_tolerance = 0.001,max_steps = 100, 
                          method = c('REML','ML','BF'), algorithm = c('Fast','Full'),
                          inv_prior_X = NULL,target_prob = 0.99,
@@ -113,7 +114,7 @@ GridLMM_GWAS = function(formula,test_formula,reduced_formula,data,weights = NULL
   
   # -------- prep Mixed Models ---------- #
   MM = prepMM(formula,data,weights,other_formulas = list(test_formula,reduced_formula),
-              relmat,X,X_ID,proximal_markers,V_setup,diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
+              relmat,normalize_relmat,X,X_ID,proximal_markers,V_setup,diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
   lmod = MM$lmod
   RE_setup = MM$RE_setup
   V_setup = MM$V_setup
