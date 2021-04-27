@@ -9,6 +9,7 @@ GridLMM_posterior(
   data,
   weights = NULL,
   relmat = NULL,
+  normalize_relmat = TRUE,
   h2_divisions = 10,
   h2_prior = function(h2s, n) 1/n,
   a = 0,
@@ -36,6 +37,8 @@ are not implemented, so using one or two vertical bars (\code{|}) or one is iden
 \item{relmat}{A list of matrices that are proportional to the (within) covariance structures of the group level effects. 
 The names of the matrices should correspond to the columns in \code{data} that are used as grouping factors. All levels
 of the grouping factor should appear as rownames of the corresponding matrix.}
+
+\item{normalize_relmat}{Should the relmats be normalized to mean(diag)==1?}
 
 \item{h2_divisions}{Starting number of divisions of the grid for each variance component.}
 

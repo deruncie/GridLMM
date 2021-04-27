@@ -33,6 +33,7 @@
 #' @param relmat A list of matrices that are proportional to the (within) covariance structures of the group level effects. 
 #'     The names of the matrices should correspond to the columns in \code{data} that are used as grouping factors. All levels
 #'     of the grouping factor should appear as rownames of the corresponding matrix.
+#' @param normalize_relmat Should the relmats be normalized to mean(diag)==1?
 #' @param h2_divisions Starting number of divisions of the grid for each variance component.
 #' @param h2_prior Function that takes two arguments: 1) A vector of \code{h2s} (ie variance component proportions), and 
 #'     2) An integer giving the number of vertices in the full grid. The function should return a non-negative value giving the prior 
@@ -68,10 +69,11 @@ GridLMM_posterior = function(formula,data,weights = NULL,relmat = NULL,
                   thresh_nonzero = 10, thresh_nonzero_marginal = 0,
                   V_setup = NULL, save_V_folder = NULL, # character vector giving folder name to save V_list
                   diagonalize=T,mc.cores = my_detectCores(),verbose=T) {
- 
+  
   MM = prepMM(formula,data,weights,other_formulas = NULL,
               relmat,normalize_relmat,X=NULL,X_ID=NULL,proximal_markers=NULL,V_setup,
               diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
+  
   lmod = MM$lmod
   RE_setup = MM$RE_setup
   V_setup = MM$V_setup

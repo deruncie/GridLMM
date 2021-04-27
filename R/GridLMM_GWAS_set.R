@@ -1,3 +1,4 @@
+
 #' GridLMM GWAS set
 #'
 #' Performs a GWAS of set-tests using GridLMM algorithm. Can perform LRTs, Wald-tests, or calculate Bayes Factors.

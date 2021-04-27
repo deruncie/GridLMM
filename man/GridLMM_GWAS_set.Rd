@@ -16,6 +16,7 @@ GridLMM_GWAS_set(
   fillNAX = FALSE,
   X_map = NULL,
   relmat = NULL,
+  normalize_relmat = TRUE,
   h2_step = 0.01,
   h2_start = NULL,
   h2_start_tolerance = 0.001,

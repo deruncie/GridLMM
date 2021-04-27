@@ -17,6 +17,7 @@ GridLMM_GWAS(
   fillNAX = FALSE,
   X_map = NULL,
   relmat = NULL,
+  normalize_relmat = TRUE,
   h2_step = 0.01,
   h2_start = NULL,
   h2_start_tolerance = 0.001,
@@ -69,6 +70,8 @@ It is possible that multiple observations reference the same row of \code{X}.}
     used to estimate the covariance matrix. This is used for appropriate downdating of \code{V} to remove proximal markers for each test.
 The names of the matrices / list elements should correspond to the columns in \code{data} that are used as grouping factors. All levels
 of the grouping factor should appear as rownames of the corresponding matrix.}
+
+\item{normalize_relmat}{should ZKZt matrices be normalized so that mean(diag) == 1? Default (true)}
 
 \item{h2_step}{Step size of the grid}
 

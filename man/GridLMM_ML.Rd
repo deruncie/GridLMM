@@ -9,6 +9,7 @@ GridLMM_ML(
   data,
   weights = NULL,
   relmat = NULL,
+  normalize_relmat = TRUE,
   initial_step = 0.5,
   tolerance = 0.01,
   ML = T,
@@ -32,6 +33,8 @@ are not implemented, so using one or two vertical bars (\code{|}) or one is iden
 \item{relmat}{A list of matrices that are proportional to the (within) covariance structures of the group level effects. 
 The names of the matrices should correspond to the columns in \code{data} that are used as grouping factors. All levels
 of the grouping factor should appear as rownames of the corresponding matrix.}
+
+\item{normalize_relmat}{Should the relmats be normalized to mean(diag)==1?}
 
 \item{initial_step}{See \strong{Details}.}
 
