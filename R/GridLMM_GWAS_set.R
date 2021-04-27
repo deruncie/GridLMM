@@ -92,7 +92,7 @@
 #'
 GridLMM_GWAS_set = function(formula,data,weights = NULL,
                         X,X_ID = 'ID', set_matrix,
-                        centerX = FALSE,scaleX = FALSE,fillNAX = FALSE,X_map = NULL, relmat = NULL,
+                        centerX = FALSE,scaleX = FALSE,fillNAX = FALSE,X_map = NULL, relmat = NULL, normalize_relmat = TRUE,
                         h2_step = 0.01, h2_start = NULL, h2_start_tolerance = 0.001,max_steps = 100,
                         method = c('REML'), algorithm = c('Fast','Full'),
                         inv_prior_X = NULL,target_prob = 0.99,
@@ -119,7 +119,7 @@ GridLMM_GWAS_set = function(formula,data,weights = NULL,
 
   # -------- prep Mixed Models ---------- #
   MM = prepMM(formula,data,weights,other_formulas = NULL,
-              relmat,X,X_ID,proximal_markers,V_setup,diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
+              relmat,normalize_relmat,X,X_ID,proximal_markers,V_setup,diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
   lmod = MM$lmod
   RE_setup = MM$RE_setup
   V_setup = MM$V_setup

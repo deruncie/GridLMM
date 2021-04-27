@@ -70,7 +70,8 @@ GridLMM_posterior = function(formula,data,weights = NULL,relmat = NULL,
                   diagonalize=T,mc.cores = my_detectCores(),verbose=T) {
  
   MM = prepMM(formula,data,weights,other_formulas = NULL,
-              relmat,normalize_relmat,X=NULL,X_ID=NULL,proximal_markers=NULL,V_setup,diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
+              relmat,normalize_relmat,X=NULL,X_ID=NULL,proximal_markers=NULL,V_setup,
+              diagonalize, svd_K = TRUE,drop0_tol = 1e-10,save_V_folder, verbose)
   lmod = MM$lmod
   RE_setup = MM$RE_setup
   V_setup = MM$V_setup
