@@ -365,24 +365,24 @@ scale_SNPs = function(X,centerX=TRUE,scaleX=TRUE,fillNAX = FALSE){
     if(any(is.na(X))) stop('NAs in X. Set fillNAX = TRUE')
     return(X)
   }
-  if(all(range(X) == c(-1,1))){
-    pi = colMeans((X+1)/2)
+  if(all(range(X,na.rm=T) == c(-1,1))){
+    pi = colMeans((X+1)/2,na.rm=T)
     # if(centerX){
     #   X = sweep(X,2,2*pi,'-')
     # }
     if(scaleX){
       X = sweep(X,2,sqrt(2*pi*(1-pi)),'/')
     }
-  } else if(all(range(X) == c(0,1))){
-    pi = colMeans(X)
+  } else if(all(range(X,na.rm=T) == c(0,1))){
+    pi = colMeans(X,na.rm=T)
     if(centerX){
       X = sweep(X,2,pi,'-')
     }
     if(scaleX){
       X = sweep(X,2,sqrt(pi*(1-pi)),'/') # is this pq?
     }
-  } else if(all(range(X) == c(0,2))){
-    pi = colMeans(X/2)
+  } else if(all(range(X,na.rm=T) == c(0,2))){
+    pi = colMeans(X/2,na.rm=T)
     if(centerX){
       X = sweep(X,2,2*pi,'-')
     }
@@ -391,10 +391,10 @@ scale_SNPs = function(X,centerX=TRUE,scaleX=TRUE,fillNAX = FALSE){
     }
   } else{
     if(centerX){
-      X = sweep(X,2,colMeans(X),'-')
+      X = sweep(X,2,colMeans(X,na.rm=T),'-')
     }
     if(scaleX) {
-      X = sweep(X,2,apply(X,2,sd),'/')
+      X = sweep(X,2,apply(X,2,sd,na.rm=T),'/')
     }
   }
   if(sum(is.na(X))>0){
