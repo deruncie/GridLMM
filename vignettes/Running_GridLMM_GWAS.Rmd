@@ -74,11 +74,11 @@ data$Col = Plot_Col[data$Plot]
 # create marker map and random genotypes
 map = expand.grid(pos = 1:n_markers_per_chr,Chr = 1:n_chr)[,2:1]
 map = data.frame(snp = paste0('snp_',1:nrow(map)),map)
-X = matrix(sample(c(0,2),n_geno*nrow(map),replace=T),ncol = nrow(map),dimnames = list(data$Geno,map$snp))
+X = matrix(sample(c(0,2),size = n_geno*nrow(map),replace=T,prob = c(.1,.9)),ncol = nrow(map),dimnames = list(data$Geno,map$snp)) #rep(runif(nrow(map),.05,.5),each = n_geno)
 
 # simulate 1 effect per chromosome
 beta = rep(0,nrow(map))
-beta[(1:n_chr-1)*n_markers_per_chr + sample(1:n_markers_per_chr,n_chr)] = 1
+for(i in 1:1) beta[(1:n_chr-1)*n_markers_per_chr + sample(1:n_markers_per_chr,n_chr)] = 1
 
 # add background variation: modeled as small effects across all the markers
 beta_background = rnorm(length(beta),0,0.1)
@@ -116,21 +116,21 @@ This parameter must be chosen. A "default" choice is given below.
 library(KRLS)
 field = data[,c('Row','Col')]
 dists = as.matrix(dist(field))
-h = median(dists)
+h = median(dists)/2
 K_plot = gausskernel(field,h^2/2); diag(K_plot)=1 # 
 rownames(K_plot) = colnames(K_plot) = data$Plot
 ```
 
 Simulate some spatial variation in the field
 ```{r}
-h2_spatial = 0.9
+h2_spatial = 0.99
 s2_spatial = 1
 chol_K_plot = chol(h2_spatial*K_plot + diag(1-h2_spatial,nrow(data)))
 data$spatial_error = t(chol_K_plot) %*% rnorm(nrow(data),0,sqrt(s2_spatial))
 field_error = 0*Plots
 field_error[data$Plot] = data$spatial_error
 image(field_error)
-data$y = data$y + data$spatial_error #
+data$y = .5*data$y + data$spatial_error #
 ```
 
 
@@ -212,6 +212,10 @@ plot(-log10(gwas$results$p_value_REML),-log10(gwas1$results$p_value_REML),col = 
 u = sort(-log10(runif(nrow(gwas$results))))
 plot(sort(-log10(gwas$results$p_value_REML))~u,pch=21,cex=.5);abline(0,1)
 points(sort(-log10(gwas1$results$p_value_REML))~u,pch=21,cex=.5,bg=2,col=NULL)
+
+
+manhattan(gwas$results,'Chr','pos','p_value_REML','snp',highlight = colnames(X)[beta != 0],ylim = 1.1*c(0,max(-log10(gwas$results$p_value_REML))))
+manhattan(gwas1$results,'Chr','pos','p_value_REML','snp',highlight = colnames(X)[beta != 0],ylim = 1.1*c(0,max(-log10(gwas$results$p_value_REML))))
 ```
 
 ## Run GWAS for GxE using K_g and K_gxe

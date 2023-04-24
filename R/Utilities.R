@@ -337,10 +337,10 @@ make_chol_V_setup = function(V_setup,h2s){
   # test if V is diagonal or sparse
   non_zero_upper_tri_V = abs(V[upper.tri(V,diag = FALSE)]) > 1e-10
   if(sum(non_zero_upper_tri_V) == 0) {  # V is diagonal
-    chol_V = as(diag(sqrt(diag(V))),'CsparseMatrix')
+    chol_V = as(as(diag(sqrt(diag(V))),'CsparseMatrix'),'dgCMatrix')
   } else if(sum(non_zero_upper_tri_V) < length(non_zero_upper_tri_V) / 2) { # V is sparse
     V = Matrix(V)
-    chol_V = as(chol(V),'CsparseMatrix')
+    chol_V = as(as(chol(V),'CsparseMatrix'),'dgCMatrix')
   } else{ # V is dense, use Eigen LLT
     chol_V = chol_c(V)
   }
