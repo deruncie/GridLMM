@@ -108,7 +108,7 @@ prepMM = function(formula,data,weights = NULL,other_formulas = NULL,
         while(name %in% names(RE_setup)) name = paste0(name,'.1') # hack for when same RE used multiple times
         
         # Z matrix
-        Z = as(Zs_term[[j]],'dgCMatrix')
+        Z = as(Zs_term[[j]],'generalMatrix')
         
         
         RE_setup[[name]] = list(
@@ -207,21 +207,21 @@ make_V_setup = function(RE_setup,
       }
       Qt = t(result$u)
     }
-    # Qt = as(drop0(as(Qt,'dgCMatrix'),tol = drop0_tol),'dgCMatrix')
+    # Qt = as(drop0(as(Qt,'generalMatrix'),tol = drop0_tol),'generalMatrix')
     QtZ_matrices = lapply(RE_setup,function(re) Qt %*% re$Z)
   } else{
     Qt = NULL
     QtZ_matrices = lapply(RE_setup,function(re) re$Z)
   }
   QtZ = do.call(cbind,QtZ_matrices[RE_names])
-  # QtZ = as(QtZ,'dgCMatrix')
+  # QtZ = as(QtZ,'generalMatrix')
   
   # ------------------------------------ #
   # ---- Calculate ZKZts --------------- #
   # ------------------------------------ #
   ZKZts = list()
   for(re in RE_names) {
-    # ZKZts[[re]] = as(forceSymmetric(drop0(QtZ_matrices[[re]] %*% RE_setup[[re]]$K %*% t(QtZ_matrices[[re]]),tol = drop0_tol)),'dgCMatrix')
+    # ZKZts[[re]] = as(forceSymmetric(drop0(QtZ_matrices[[re]] %*% RE_setup[[re]]$K %*% t(QtZ_matrices[[re]]),tol = drop0_tol)),'generalMatrix')
     # ZKZts[[re]] = forceSymmetric(drop0(QtZ_matrices[[re]] %*% RE_setup[[re]]$K %*% t(QtZ_matrices[[re]]),tol = drop0_tol))
     # ZKZts[[re]] = as.matrix(forceSymmetric(drop0(QtZ_matrices[[re]] %*% RE_setup[[re]]$K %*% t(QtZ_matrices[[re]]),tol = drop0_tol)))
     ZKZts[[re]] = QtZ_matrices[[re]] %*% RE_setup[[re]]$K %*% t(QtZ_matrices[[re]])
@@ -337,14 +337,14 @@ make_chol_V_setup = function(V_setup,h2s){
   # test if V is diagonal or sparse
   non_zero_upper_tri_V = abs(V[upper.tri(V,diag = FALSE)]) > 1e-10
   if(sum(non_zero_upper_tri_V) == 0) {  # V is diagonal
-    chol_V = as(as(diag(sqrt(diag(V))),'CsparseMatrix'),'dgCMatrix')
+    chol_V = as(as(diag(sqrt(diag(V))),'CsparseMatrix'),'generalMatrix')
   } else if(sum(non_zero_upper_tri_V) < length(non_zero_upper_tri_V) / 2) { # V is sparse
     V = Matrix(V)
-    chol_V = as(as(chol(V),'CsparseMatrix'),'dgCMatrix')
+    chol_V = as(as(chol(V),'CsparseMatrix'),'generalMatrix')
   } else{ # V is dense, use Eigen LLT
     chol_V = chol_c(V)
   }
-  if(inherits(chol_V,'dtCMatrix')) chol_V = as(chol_V,'dgCMatrix')
+  if(inherits(chol_V,'dtCMatrix')) chol_V = as(chol_V,'generalMatrix')
   V_log_det = 2*sum(log(diag(chol_V)))
   
   chol_V_setup = list(chol_V = chol_V,V_log_det = V_log_det, h2s = h2s)

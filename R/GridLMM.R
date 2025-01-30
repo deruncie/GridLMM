@@ -122,10 +122,10 @@ GridLMM_posterior = function(formula,data,weights = NULL,relmat = NULL,
     registerDoParallel(mc.cores)
     new_h2s_solutions = foreach(h2s = iter(h2s_to_test,by = 'row')) %do% {
       chol_V_setup = make_chol_V_setup(V_setup,unlist(h2s))
-      chol_Vi = chol_V_setup$chol_V
+      chol_Vi = as(chol_V_setup$chol_V,'generalMatrix')
       V_log_det = 2*sum(log(diag(chol_Vi)))
       SSs <- GridLMM_SS_matrix(Y,chol_Vi,X_cov,NULL,integer(),inv_prior_X)
-      
+      # recover()
       mu_star = SSs$beta_hats
       V_star_inv = matrix(0,length(mu_star),length(mu_star))
       V_star_inv[lower.tri(V_star_inv,diag=T)] = SSs$V_star_L
@@ -208,7 +208,7 @@ GridLMM_posterior = function(formula,data,weights = NULL,relmat = NULL,
 
 
 
-#' Find the (Restricted) Maximim Likelihood solution to a linear mixed model by grid search
+#' Find the (Restricted) Maximum Likelihood solution to a linear mixed model by grid search
 #' 
 #' Uses the GridLMM approach to find the ML or REML solution to variance componenents of a linear mixed model.
 #' 
