@@ -1,4 +1,2 @@
-CXX = /opt/homebrew/opt/llvm/bin/clang++
-CXXFLAGS += -I/opt/homebrew/opt/llvm/include/c++/v1 -I/opt/homebrew/opt/llvm/include -fopenmp
-LDFLAGS += -L/opt/homebrew/opt/llvm/lib -L/opt/homebrew/opt/libomp/lib
+CXXFLAGS += -fopenmp
 PKG_LIBS += -lomp
