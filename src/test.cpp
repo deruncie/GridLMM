@@ -1,68 +1,68 @@
-#include <RcppEigen.h>
-
-
-using Eigen::Map;               	      // 'Eigen::Maps' rather than copies
-using Eigen::MatrixXd;                  // variable size matrix, double precision
-using Eigen::VectorXd;                  // variable size vector, double precision
-using Eigen::ArrayXd;                  // variable size vector, double precision
-typedef Eigen::SparseMatrix<double> SpMat;
-typedef Eigen::Map<SpMat> MSpMat;
-
-using namespace Rcpp;
-using namespace Eigen;
-
-
-
-
-// [[Rcpp::export()]]
-MatrixXd chol_update2(MatrixXd L, MatrixXd X, int sign) {
-  int n = L.rows();
-  Map<MatrixXd> L_new(L.data(),n,n);
-  for(int i = 0; i < X.cols(); i++){
-    for(int k = 0; k < n; k++){
-      double L_kk = L_new.coeffRef(k,k);
-      double x_k = X.coeffRef(k,i);
-      double r = sqrt(L_kk*L_kk + sign * x_k*x_k);
-      double c = r / L_kk;
-      double s = x_k / L_kk;
-      L_new.coeffRef(k,k) = r;
-      if(k < (n-1)) {
-        L_new.block(k+1,k,n-k-1,1) = (L.block(k+1,k,n-k-1,1) + sign * s * X.block(k+1,i,n-k-1,1))/c;
-        X.block(k+1,i,n-k-1,1) = c*X.block(k+1,i,n-k-1,1) - s*L_new.block(k+1,k,n-k-1,1);
-      }
-    }
-  }
-  return(L_new);
-}
-
-// [[Rcpp::export()]]
-MatrixXd chol_update2s(MatrixXd L, MatrixXd X, int sign) {
-  int n = L.rows();
-  Map<MatrixXd> L_new(L.data(),n,n);
-  for(int i = 0; i < X.cols(); i++){
-    int sum_nzero = 0;
-    // Rcout << X << std::endl << std::endl;
-    for(int k = 0; k < n; k++){
-      double x_k = X.coeffRef(k,i);
-      // if(x_k != 0.0) {
-      if(std::abs(x_k - 0.0) > 1e-10) {
-        // Rcout << i << " " << k << " " << x_k << std::endl;
-        sum_nzero++;
-        double L_kk = L_new.coeffRef(k,k);
-        double r = sqrt(L_kk*L_kk + sign * x_k*x_k);
-        double c = r / L_kk;
-        double s = x_k / L_kk;
-        L_new.coeffRef(k,k) = r;
-        if(k < (n-1)) {
-          L_new.block(k+1,k,n-k-1,1) = (L.block(k+1,k,n-k-1,1) + sign * s * X.block(k+1,i,n-k-1,1))/c;
-          X.block(k+1,i,n-k-1,1) = c*X.block(k+1,i,n-k-1,1) - s*L_new.block(k+1,k,n-k-1,1);
-        }
-      }
-    }
-    // Rcout << sum_nzero << std::endl;
-  }
-  return(L_new);
-}
+// #include <RcppEigen.h>
+// 
+// 
+// using Eigen::Map;               	      // 'Eigen::Maps' rather than copies
+// using Eigen::MatrixXd;                  // variable size matrix, double precision
+// using Eigen::VectorXd;                  // variable size vector, double precision
+// using Eigen::ArrayXd;                  // variable size vector, double precision
+// typedef Eigen::SparseMatrix<double> SpMat;
+// typedef Eigen::Map<SpMat> MSpMat;
+// 
+// using namespace Rcpp;
+// using namespace Eigen;
+// 
+// 
+// 
+// 
+// // [[Rcpp::export()]]
+// MatrixXd chol_update2(MatrixXd L, MatrixXd X, int sign) {
+//   int n = L.rows();
+//   Map<MatrixXd> L_new(L.data(),n,n);
+//   for(int i = 0; i < X.cols(); i++){
+//     for(int k = 0; k < n; k++){
+//       double L_kk = L_new.coeffRef(k,k);
+//       double x_k = X.coeffRef(k,i);
+//       double r = sqrt(L_kk*L_kk + sign * x_k*x_k);
+//       double c = r / L_kk;
+//       double s = x_k / L_kk;
+//       L_new.coeffRef(k,k) = r;
+//       if(k < (n-1)) {
+//         L_new.block(k+1,k,n-k-1,1) = (L.block(k+1,k,n-k-1,1) + sign * s * X.block(k+1,i,n-k-1,1))/c;
+//         X.block(k+1,i,n-k-1,1) = c*X.block(k+1,i,n-k-1,1) - s*L_new.block(k+1,k,n-k-1,1);
+//       }
+//     }
+//   }
+//   return(L_new);
+// }
+// 
+// // [[Rcpp::export()]]
+// MatrixXd chol_update2s(MatrixXd L, MatrixXd X, int sign) {
+//   int n = L.rows();
+//   Map<MatrixXd> L_new(L.data(),n,n);
+//   for(int i = 0; i < X.cols(); i++){
+//     int sum_nzero = 0;
+//     // Rcout << X << std::endl << std::endl;
+//     for(int k = 0; k < n; k++){
+//       double x_k = X.coeffRef(k,i);
+//       // if(x_k != 0.0) {
+//       if(std::abs(x_k - 0.0) > 1e-10) {
+//         // Rcout << i << " " << k << " " << x_k << std::endl;
+//         sum_nzero++;
+//         double L_kk = L_new.coeffRef(k,k);
+//         double r = sqrt(L_kk*L_kk + sign * x_k*x_k);
+//         double c = r / L_kk;
+//         double s = x_k / L_kk;
+//         L_new.coeffRef(k,k) = r;
+//         if(k < (n-1)) {
+//           L_new.block(k+1,k,n-k-1,1) = (L.block(k+1,k,n-k-1,1) + sign * s * X.block(k+1,i,n-k-1,1))/c;
+//           X.block(k+1,i,n-k-1,1) = c*X.block(k+1,i,n-k-1,1) - s*L_new.block(k+1,k,n-k-1,1);
+//         }
+//       }
+//     }
+//     // Rcout << sum_nzero << std::endl;
+//   }
+//   return(L_new);
+// }
 // 
 // 
 // MatrixXd block_cholesky2(MatrixXd L_A, // Cholesky L matrix for A matrix (lower-left block)

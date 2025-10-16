@@ -50,10 +50,6 @@ It is possible that multiple observations reference the same row of \code{X}.}
 
 \item{weights}{An optional vector of observation-specific weights.}
 
-\item{centerX}{TRUE/FALSE for each. Applied to the \code{X} matrix before using \code{X} to form any GRMs.}
-
-\item{scaleX}{TRUE/FALSE for each. Applied to the \code{X} matrix before using \code{X} to form any GRMs.}
-
 \item{relmat}{Either:
 1) A list of matrices that are proportional to the (within) covariance structures of the group level effects. 
 2) A list of lists with elements (\code{K}, \code{p}) with a covariance matrix and an integer listing the number of markers 
@@ -101,7 +97,9 @@ coefficient. This is a number that multiplies \code{lambda} to allow
 differential shrinkage. Can be 0 for some variables, which implies no
 shrinkage, and that variable is always included in the model. Default is 1
 for all variables (and implicitly infinity for variables listed in
-\code{exclude}). Note: the penalty factors are internally rescaled to sum to
+\code{exclude}). Also, any \code{penalty.factor} that is set to \code{inf} is
+converted to an \code{exclude}, and then internally reset to 1.
+Note: the penalty factors are internally rescaled to sum to
 nvars, and the lambda sequence will reflect this change.}
 
 \item{foldid}{vector of integers that divide the data into a set of non-overlapping folds for cross-validation.}

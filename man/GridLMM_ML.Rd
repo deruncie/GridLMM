@@ -2,7 +2,7 @@
 % Please edit documentation in R/GridLMM.R
 \name{GridLMM_ML}
 \alias{GridLMM_ML}
-\title{Find the (Restricted) Maximim Likelihood solution to a linear mixed model by grid search}
+\title{Find the (Restricted) Maximum Likelihood solution to a linear mixed model by grid search}
 \usage{
 GridLMM_ML(
   formula,

@@ -122,7 +122,7 @@ GridLMM_posterior = function(formula,data,weights = NULL,relmat = NULL,
     registerDoParallel(mc.cores)
     new_h2s_solutions = foreach(h2s = iter(h2s_to_test,by = 'row')) %do% {
       chol_V_setup = make_chol_V_setup(V_setup,unlist(h2s))
-      chol_Vi = as(chol_V_setup$chol_V,'generalMatrix')
+      chol_Vi = as(as(chol_V_setup$chol_V,'generalMatrix'),'CsparseMatrix')
       V_log_det = 2*sum(log(diag(chol_Vi)))
       SSs <- GridLMM_SS_matrix(Y,chol_Vi,X_cov,NULL,integer(),inv_prior_X)
       # recover()

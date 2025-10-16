@@ -187,29 +187,3 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// chol_update2
-MatrixXd chol_update2(MatrixXd L, MatrixXd X, int sign);
-RcppExport SEXP _GridLMM_chol_update2(SEXP LSEXP, SEXP XSEXP, SEXP signSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< MatrixXd >::type L(LSEXP);
-    Rcpp::traits::input_parameter< MatrixXd >::type X(XSEXP);
-    Rcpp::traits::input_parameter< int >::type sign(signSEXP);
-    rcpp_result_gen = Rcpp::wrap(chol_update2(L, X, sign));
-    return rcpp_result_gen;
-END_RCPP
-}
-// chol_update2s
-MatrixXd chol_update2s(MatrixXd L, MatrixXd X, int sign);
-RcppExport SEXP _GridLMM_chol_update2s(SEXP LSEXP, SEXP XSEXP, SEXP signSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< MatrixXd >::type L(LSEXP);
-    Rcpp::traits::input_parameter< MatrixXd >::type X(XSEXP);
-    Rcpp::traits::input_parameter< int >::type sign(signSEXP);
-    rcpp_result_gen = Rcpp::wrap(chol_update2s(L, X, sign));
-    return rcpp_result_gen;
-END_RCPP
-}
